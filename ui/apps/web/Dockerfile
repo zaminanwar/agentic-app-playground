@@ -26,24 +26,15 @@ ENV PNPM_HOME="/pnpm" \
 # Pin Corepack-managed pnpm to the workspace's packageManager (ui/package.json).
 RUN corepack enable && corepack prepare pnpm@10.6.3 --activate
 
-# ---------------------------- Dependencies ----------------------------------
-# Install the full workspace dep graph against the committed lockfile.
-FROM base AS deps
-WORKDIR /app
-# Copy only manifests + lockfile first for a cacheable install layer.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
-COPY apps/web/package.json ./apps/web/package.json
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
-
 # ------------------------------- Builder ------------------------------------
+# Install with the FULL workspace present, then build, in ONE stage. Copying
+# pnpm's symlinked node_modules across build stages breaks the .pnpm store
+# links (Next then can't resolve its own binary), so we don't split it.
 FROM base AS builder
 WORKDIR /app
-# Reuse installed node_modules (workspace root + apps/web).
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-# Bring in the full workspace source.
 COPY . .
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # No NEXT_PUBLIC_API_URL: the browser calls the same-origin `/api/agent` proxy,
 # and the agent URL is provided at runtime (AGENT_URL), not baked in. Only the

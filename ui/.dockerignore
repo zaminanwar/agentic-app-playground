@@ -1,0 +1,25 @@
+# Build context = ui/ (workspace root). NEVER copy host node_modules into the
+# image: on Windows pnpm uses junctions/symlinks that break in the Linux
+# container and corrupt module resolution (e.g. `next` not found). The image
+# does a fresh `pnpm install --frozen-lockfile` instead.
+node_modules
+**/node_modules
+
+# Build outputs / caches
+.next
+**/.next
+.turbo
+**/.turbo
+dist
+**/dist
+
+# Local env / secrets — never bake into the image
+.env
+**/.env
+.env.*
+**/.env.*
+
+# VCS / misc
+.git
+.gitignore
+*.log

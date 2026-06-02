@@ -4,5 +4,5 @@
     "agent": "./agent.py:agent"
   },
   "env": ".env",
-  "api_version": "0.2"
+  "api_version": "0.9.0"
 }

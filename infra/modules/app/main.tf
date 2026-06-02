@@ -164,7 +164,10 @@ resource "google_sql_database_instance" "pg" {
   deletion_protection = var.sql_deletion_protection
 
   settings {
-    tier              = var.sql_tier
+    tier = var.sql_tier
+    # ENTERPRISE (not the ENTERPRISE_PLUS default) supports shared-core tiers
+    # like db-f1-micro / db-g1-small and the db-custom-* tiers we use.
+    edition           = "ENTERPRISE"
     availability_type = var.sql_availability_type
     disk_size         = var.sql_disk_size_gb
     disk_autoresize   = true
@@ -278,6 +281,11 @@ resource "google_cloud_run_v2_service" "agent" {
   name     = var.agent_service_name
   location = var.region
   labels   = local.common_labels
+
+  # Cloud Run services are stateless (durable data is in Cloud SQL/Redis), so
+  # allow Terraform to replace them freely. The provider defaults this to true,
+  # which blocks redeploys that require replacement.
+  deletion_protection = false
 
   # PRIVATE agent (D3): no public ingress path needed because only the web
   # runtime SA invokes it (granted run.invoker below) with an OIDC ID token.
@@ -446,6 +454,9 @@ resource "google_cloud_run_v2_service" "web" {
   name     = var.web_service_name
   location = var.region
   labels   = local.common_labels
+
+  # Stateless service — let Terraform replace it freely (provider default true).
+  deletion_protection = false
 
   ingress = "INGRESS_TRAFFIC_ALL"
 

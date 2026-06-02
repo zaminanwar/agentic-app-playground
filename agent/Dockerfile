@@ -1,4 +1,4 @@
-FROM langchain/langgraph-api:0.2-py3.11
+FROM langchain/langgraph-api:0.9.0-py3.11
 
 
 

@@ -2,7 +2,8 @@
 name = "agent"
 version = "0.1.0"
 description = "Gemini (Vertex AI) LangGraph agent served by the Agent Server."
-readme = "README.md"
+# NOTE: no `readme` key on purpose — the Docker build context (.dockerignore)
+# omits README.md, and hatchling errors if `readme` points at a missing file.
 # create_agent lives in langchain.agents (LangChain 1.0+). 3.11 is the local
 # dev version and is supported by every dep below; the upper bound keeps us
 # off untested future majors while staying current on Cloud Run base images.
