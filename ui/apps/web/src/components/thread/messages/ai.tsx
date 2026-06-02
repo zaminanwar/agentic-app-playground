@@ -1,15 +1,23 @@
 import { parsePartialJson } from "@langchain/core/output_parsers";
 import { useStreamContext } from "@/providers/Stream";
-import { AIMessage, Checkpoint, Message } from "@langchain/langgraph-sdk";
+import {
+  AIMessage,
+  Checkpoint,
+  Message,
+  ToolMessage,
+} from "@langchain/langgraph-sdk";
 import { getContentString } from "../utils";
 import { BranchSwitcher, CommandBar } from "./shared";
 import { MarkdownText } from "../markdown-text";
 import { LoadExternalComponent } from "@langchain/langgraph-sdk/react-ui";
 import { cn } from "@/lib/utils";
-import { ToolCalls, ToolResult } from "./tool-calls";
+import { ToolResult } from "./tool-calls";
+import { ToolCallViews } from "./tool-call-views";
 import { MessageContentComplex } from "@langchain/core/messages";
 import { Fragment } from "react/jsx-runtime";
+import { useMemo } from "react";
 import { isAgentInboxInterruptSchema } from "@/lib/agent-inbox-interrupt";
+import { TASK_TOOL_NAME } from "@/lib/agent-types";
 import { ThreadView } from "../agent-inbox";
 import { useQueryState, parseAsBoolean } from "nuqs";
 import { GenericInterruptView } from "./generic-interrupt";
@@ -82,6 +90,26 @@ export function AssistantMessage({
   );
 
   const thread = useStreamContext();
+
+  // Map tool_call_id -> result message (so delegation cards can show each
+  // subagent's report), and collect `task` tool-call ids whose separate result
+  // message should be suppressed from the transcript (it lives inside the card).
+  const { resultsById, taskCallIds } = useMemo(() => {
+    const results = new Map<string, ToolMessage>();
+    const taskIds = new Set<string>();
+    for (const m of thread.messages) {
+      if (m.type === "tool" && (m as ToolMessage).tool_call_id) {
+        results.set((m as ToolMessage).tool_call_id, m as ToolMessage);
+      }
+      if (m.type === "ai") {
+        for (const tc of (m as AIMessage).tool_calls ?? []) {
+          if (tc.name === TASK_TOOL_NAME && tc.id) taskIds.add(tc.id);
+        }
+      }
+    }
+    return { resultsById: results, taskCallIds: taskIds };
+  }, [thread.messages]);
+
   const isLastMessage =
     thread.messages[thread.messages.length - 1].id === message?.id;
   const hasNoAIOrToolMessages = !thread.messages.find(
@@ -112,6 +140,13 @@ export function AssistantMessage({
     return null;
   }
 
+  // A `task` subagent's result is rendered inside its SubagentCard, so the
+  // standalone tool-result message is suppressed from the transcript.
+  const toolCallId = (message as ToolMessage | undefined)?.tool_call_id;
+  if (isToolResult && toolCallId && taskCallIds.has(toolCallId)) {
+    return null;
+  }
+
   return (
     <div className="flex items-start mr-auto gap-2 group">
       {isToolResult ? (
@@ -127,12 +162,23 @@ export function AssistantMessage({
           {!hideToolCalls && (
             <>
               {(hasToolCalls && toolCallsHaveContents && (
-                <ToolCalls toolCalls={message.tool_calls} />
+                <ToolCallViews
+                  toolCalls={message.tool_calls}
+                  resultsById={resultsById}
+                />
               )) ||
                 (hasAnthropicToolCalls && (
-                  <ToolCalls toolCalls={anthropicStreamedToolCalls} />
+                  <ToolCallViews
+                    toolCalls={anthropicStreamedToolCalls}
+                    resultsById={resultsById}
+                  />
                 )) ||
-                (hasToolCalls && <ToolCalls toolCalls={message.tool_calls} />)}
+                (hasToolCalls && (
+                  <ToolCallViews
+                    toolCalls={message.tool_calls}
+                    resultsById={resultsById}
+                  />
+                ))}
             </>
           )}
 

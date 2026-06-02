@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { ReactNode, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useStreamContext } from "@/providers/Stream";
 import { useState, FormEvent } from "react";
@@ -20,6 +20,8 @@ import {
   PanelRightOpen,
   PanelRightClose,
   SquarePen,
+  Sparkles,
+  Telescope,
 } from "lucide-react";
 import { useQueryState, parseAsBoolean } from "nuqs";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
@@ -29,12 +31,21 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import { GitHubSVG } from "../icons/github";
+import { WorkspacePanel } from "./workspace";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
+
+const WORKSPACE_WIDTH = 430;
+
+const EXAMPLE_PROMPTS = [
+  "Brief me on the James Webb Space Telescope's biggest discoveries so far.",
+  "Compare RAG and fine-tuning for building enterprise LLM applications.",
+  "What's the latest on solid-state battery commercialization?",
+];
 
 function StickyToBottomContent(props: {
   content: ReactNode;
@@ -104,6 +115,10 @@ export function Thread() {
   const [hideToolCalls, setHideToolCalls] = useQueryState(
     "hideToolCalls",
     parseAsBoolean.withDefault(false),
+  );
+  const [workspaceOpen, setWorkspaceOpen] = useQueryState(
+    "workspaceOpen",
+    parseAsBoolean.withDefault(true),
   );
   const [input, setInput] = useState("");
   const [firstTokenReceived, setFirstTokenReceived] = useState(false);
@@ -203,6 +218,7 @@ export function Thread() {
   const hasNoAIOrToolMessages = !messages.find(
     (m) => m.type === "ai" || m.type === "tool",
   );
+  const showWorkspace = chatStarted && workspaceOpen && isLargeScreen;
 
   return (
     <div className="flex w-full h-screen overflow-hidden">
@@ -227,19 +243,12 @@ export function Thread() {
           </div>
         </motion.div>
       </div>
+
+      {/* Main area: chat column + workspace column, pushed right by history. */}
       <motion.div
-        className={cn(
-          "flex-1 flex flex-col min-w-0 overflow-hidden relative",
-          !chatStarted && "grid-rows-[1fr]",
-        )}
-        layout={isLargeScreen}
+        className="flex-1 flex min-w-0 overflow-hidden"
         animate={{
-          marginLeft: chatHistoryOpen ? (isLargeScreen ? 300 : 0) : 0,
-          width: chatHistoryOpen
-            ? isLargeScreen
-              ? "calc(100% - 300px)"
-              : "100%"
-            : "100%",
+          marginLeft: chatHistoryOpen && isLargeScreen ? 300 : 0,
         }}
         transition={
           isLargeScreen
@@ -247,32 +256,10 @@ export function Thread() {
             : { duration: 0 }
         }
       >
-        {!chatStarted && (
-          <div className="absolute top-0 left-0 w-full flex items-center justify-between gap-3 p-2 pl-4 z-10">
-            <div>
-              {(!chatHistoryOpen || !isLargeScreen) && (
-                <Button
-                  className="hover:bg-gray-100"
-                  variant="ghost"
-                  onClick={() => setChatHistoryOpen((p) => !p)}
-                >
-                  {chatHistoryOpen ? (
-                    <PanelRightOpen className="size-5" />
-                  ) : (
-                    <PanelRightClose className="size-5" />
-                  )}
-                </Button>
-              )}
-            </div>
-            <div className="absolute top-2 right-4 flex items-center">
-              <OpenGitHubRepo />
-            </div>
-          </div>
-        )}
-        {chatStarted && (
-          <div className="flex items-center justify-between gap-3 p-2 z-10 relative">
-            <div className="flex items-center justify-start gap-2 relative">
-              <div className="absolute left-0 z-10">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+          {!chatStarted && (
+            <div className="absolute top-0 left-0 w-full flex items-center justify-between gap-3 p-2 pl-4 z-10">
+              <div>
                 {(!chatHistoryOpen || !isLargeScreen) && (
                   <Button
                     className="hover:bg-gray-100"
@@ -287,162 +274,242 @@ export function Thread() {
                   </Button>
                 )}
               </div>
-              <motion.button
-                className="flex gap-2 items-center cursor-pointer"
-                onClick={() => setThreadId(null)}
-                animate={{
-                  marginLeft: !chatHistoryOpen ? 48 : 0,
-                }}
-                transition={{
-                  type: "spring",
-                  stiffness: 300,
-                  damping: 30,
-                }}
-              >
-                <LangGraphLogoSVG width={32} height={32} />
-                <span className="text-xl font-semibold tracking-tight">
-                  Agent Chat
-                </span>
-              </motion.button>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="flex items-center">
+              <div className="absolute top-2 right-4 flex items-center">
                 <OpenGitHubRepo />
               </div>
-              <TooltipIconButton
-                size="lg"
-                className="p-4"
-                tooltip="New thread"
-                variant="ghost"
-                onClick={() => setThreadId(null)}
-              >
-                <SquarePen className="size-5" />
-              </TooltipIconButton>
             </div>
-
-            <div className="absolute inset-x-0 top-full h-5 bg-gradient-to-b from-background to-background/0" />
-          </div>
-        )}
-
-        <StickToBottom className="relative flex-1 overflow-hidden">
-          <StickyToBottomContent
-            className={cn(
-              "absolute px-4 inset-0 overflow-y-scroll [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-track]:bg-transparent",
-              !chatStarted && "flex flex-col items-stretch mt-[25vh]",
-              chatStarted && "grid grid-rows-[1fr_auto]",
-            )}
-            contentClassName="pt-8 pb-16  max-w-3xl mx-auto flex flex-col gap-4 w-full"
-            content={
-              <>
-                {messages
-                  .filter((m) => !m.id?.startsWith(DO_NOT_RENDER_ID_PREFIX))
-                  .map((message, index) =>
-                    message.type === "human" ? (
-                      <HumanMessage
-                        key={message.id || `${message.type}-${index}`}
-                        message={message}
-                        isLoading={isLoading}
-                      />
-                    ) : (
-                      <AssistantMessage
-                        key={message.id || `${message.type}-${index}`}
-                        message={message}
-                        isLoading={isLoading}
-                        handleRegenerate={handleRegenerate}
-                      />
-                    ),
-                  )}
-                {/* Special rendering case where there are no AI/tool messages, but there is an interrupt.
-                    We need to render it outside of the messages list, since there are no messages to render */}
-                {hasNoAIOrToolMessages && !!stream.interrupt && (
-                  <AssistantMessage
-                    key="interrupt-msg"
-                    message={undefined}
-                    isLoading={isLoading}
-                    handleRegenerate={handleRegenerate}
-                  />
-                )}
-                {isLoading && !firstTokenReceived && (
-                  <AssistantMessageLoading />
-                )}
-              </>
-            }
-            footer={
-              <div className="sticky flex flex-col items-center gap-8 bottom-0 bg-white">
-                {!chatStarted && (
-                  <div className="flex gap-3 items-center">
-                    <LangGraphLogoSVG className="flex-shrink-0 h-8" />
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                      Agent Chat
-                    </h1>
-                  </div>
-                )}
-
-                <ScrollToBottom className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 animate-in fade-in-0 zoom-in-95" />
-
-                <div className="bg-muted rounded-2xl border shadow-xs mx-auto mb-8 w-full max-w-3xl relative z-10">
-                  <form
-                    onSubmit={handleSubmit}
-                    className="grid grid-rows-[1fr_auto] gap-2 max-w-3xl mx-auto"
-                  >
-                    <textarea
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (
-                          e.key === "Enter" &&
-                          !e.shiftKey &&
-                          !e.metaKey &&
-                          !e.nativeEvent.isComposing
-                        ) {
-                          e.preventDefault();
-                          const el = e.target as HTMLElement | undefined;
-                          const form = el?.closest("form");
-                          form?.requestSubmit();
-                        }
-                      }}
-                      placeholder="Type your message..."
-                      className="p-3.5 pb-0 border-none bg-transparent field-sizing-content shadow-none ring-0 outline-none focus:outline-none focus:ring-0 resize-none"
-                    />
-
-                    <div className="flex items-center justify-between p-2 pt-4">
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            id="render-tool-calls"
-                            checked={hideToolCalls ?? false}
-                            onCheckedChange={setHideToolCalls}
-                          />
-                          <Label
-                            htmlFor="render-tool-calls"
-                            className="text-sm text-gray-600"
-                          >
-                            Hide Tool Calls
-                          </Label>
-                        </div>
-                      </div>
-                      {stream.isLoading ? (
-                        <Button key="stop" onClick={() => stream.stop()}>
-                          <LoaderCircle className="w-4 h-4 animate-spin" />
-                          Cancel
-                        </Button>
+          )}
+          {chatStarted && (
+            <div className="flex items-center justify-between gap-3 p-2 z-10 relative">
+              <div className="flex items-center justify-start gap-2 relative">
+                <div className="absolute left-0 z-10">
+                  {(!chatHistoryOpen || !isLargeScreen) && (
+                    <Button
+                      className="hover:bg-gray-100"
+                      variant="ghost"
+                      onClick={() => setChatHistoryOpen((p) => !p)}
+                    >
+                      {chatHistoryOpen ? (
+                        <PanelRightOpen className="size-5" />
                       ) : (
-                        <Button
-                          type="submit"
-                          className="transition-all shadow-md"
-                          disabled={isLoading || !input.trim()}
-                        >
-                          Send
-                        </Button>
+                        <PanelRightClose className="size-5" />
                       )}
-                    </div>
-                  </form>
+                    </Button>
+                  )}
                 </div>
+                <motion.button
+                  className="flex gap-2 items-center cursor-pointer"
+                  onClick={() => setThreadId(null)}
+                  animate={{
+                    marginLeft: !chatHistoryOpen ? 48 : 0,
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 30,
+                  }}
+                >
+                  <LangGraphLogoSVG width={32} height={32} />
+                  <span className="text-xl font-semibold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
+                    Deep Research Agent
+                  </span>
+                </motion.button>
               </div>
-            }
-          />
-        </StickToBottom>
+
+              <div className="flex items-center gap-3">
+                {isLoading && (
+                  <span className="hidden sm:flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                    <LoaderCircle className="size-3 animate-spin" />
+                    Researching…
+                  </span>
+                )}
+                <div className="flex items-center">
+                  <OpenGitHubRepo />
+                </div>
+                {isLargeScreen && !workspaceOpen && (
+                  <TooltipIconButton
+                    size="lg"
+                    className="p-4"
+                    tooltip="Show research workspace"
+                    variant="ghost"
+                    onClick={() => setWorkspaceOpen(true)}
+                  >
+                    <Sparkles className="size-5 text-blue-500" />
+                  </TooltipIconButton>
+                )}
+                <TooltipIconButton
+                  size="lg"
+                  className="p-4"
+                  tooltip="New thread"
+                  variant="ghost"
+                  onClick={() => setThreadId(null)}
+                >
+                  <SquarePen className="size-5" />
+                </TooltipIconButton>
+              </div>
+
+              <div className="absolute inset-x-0 top-full h-5 bg-gradient-to-b from-background to-background/0" />
+            </div>
+          )}
+
+          <StickToBottom className="relative flex-1 overflow-hidden">
+            <StickyToBottomContent
+              className={cn(
+                "absolute px-4 inset-0 overflow-y-scroll [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-track]:bg-transparent",
+                !chatStarted && "flex flex-col items-stretch mt-[25vh]",
+                chatStarted && "grid grid-rows-[1fr_auto]",
+              )}
+              contentClassName="pt-8 pb-16  max-w-3xl mx-auto flex flex-col gap-4 w-full"
+              content={
+                <>
+                  {messages
+                    .filter((m) => !m.id?.startsWith(DO_NOT_RENDER_ID_PREFIX))
+                    .map((message, index) =>
+                      message.type === "human" ? (
+                        <HumanMessage
+                          key={message.id || `${message.type}-${index}`}
+                          message={message}
+                          isLoading={isLoading}
+                        />
+                      ) : (
+                        <AssistantMessage
+                          key={message.id || `${message.type}-${index}`}
+                          message={message}
+                          isLoading={isLoading}
+                          handleRegenerate={handleRegenerate}
+                        />
+                      ),
+                    )}
+                  {/* Special rendering case where there are no AI/tool messages, but there is an interrupt.
+                    We need to render it outside of the messages list, since there are no messages to render */}
+                  {hasNoAIOrToolMessages && !!stream.interrupt && (
+                    <AssistantMessage
+                      key="interrupt-msg"
+                      message={undefined}
+                      isLoading={isLoading}
+                      handleRegenerate={handleRegenerate}
+                    />
+                  )}
+                  {isLoading && !firstTokenReceived && (
+                    <AssistantMessageLoading />
+                  )}
+                </>
+              }
+              footer={
+                <div className="sticky flex flex-col items-center gap-8 bottom-0 bg-white">
+                  {!chatStarted && (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex gap-3 items-center">
+                        <LangGraphLogoSVG className="flex-shrink-0 h-8" />
+                        <h1 className="text-2xl font-semibold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
+                          Deep Research Agent
+                        </h1>
+                      </div>
+                      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Telescope className="size-4 text-blue-500" />
+                        Plans, delegates to research subagents, and writes a
+                        cited report.
+                      </p>
+                    </div>
+                  )}
+
+                  <ScrollToBottom className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 animate-in fade-in-0 zoom-in-95" />
+
+                  <div className="bg-muted rounded-2xl border shadow-xs mx-auto mb-8 w-full max-w-3xl relative z-10">
+                    <form
+                      onSubmit={handleSubmit}
+                      className="grid grid-rows-[1fr_auto] gap-2 max-w-3xl mx-auto"
+                    >
+                      <textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (
+                            e.key === "Enter" &&
+                            !e.shiftKey &&
+                            !e.metaKey &&
+                            !e.nativeEvent.isComposing
+                          ) {
+                            e.preventDefault();
+                            const el = e.target as HTMLElement | undefined;
+                            const form = el?.closest("form");
+                            form?.requestSubmit();
+                          }
+                        }}
+                        placeholder="Ask a research question…"
+                        className="p-3.5 pb-0 border-none bg-transparent field-sizing-content shadow-none ring-0 outline-none focus:outline-none focus:ring-0 resize-none"
+                      />
+
+                      <div className="flex items-center justify-between p-2 pt-4">
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              id="render-tool-calls"
+                              checked={hideToolCalls ?? false}
+                              onCheckedChange={setHideToolCalls}
+                            />
+                            <Label
+                              htmlFor="render-tool-calls"
+                              className="text-sm text-gray-600"
+                            >
+                              Hide Tool Calls
+                            </Label>
+                          </div>
+                        </div>
+                        {stream.isLoading ? (
+                          <Button key="stop" onClick={() => stream.stop()}>
+                            <LoaderCircle className="w-4 h-4 animate-spin" />
+                            Cancel
+                          </Button>
+                        ) : (
+                          <Button
+                            type="submit"
+                            className="transition-all shadow-md"
+                            disabled={isLoading || !input.trim()}
+                          >
+                            Send
+                          </Button>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+
+                  {!chatStarted && (
+                    <div className="-mt-4 mb-8 flex flex-wrap justify-center gap-2">
+                      {EXAMPLE_PROMPTS.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => setInput(prompt)}
+                          className="max-w-xs truncate rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              }
+            />
+          </StickToBottom>
+        </div>
+
+        {/* Research workspace: live plan + report/artifacts, synced from agent state. */}
+        <AnimatePresence initial={false}>
+          {showWorkspace && (
+            <motion.div
+              className="hidden lg:block h-full border-l border-border overflow-hidden"
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: WORKSPACE_WIDTH, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 34 }}
+            >
+              <div style={{ width: WORKSPACE_WIDTH }} className="h-full">
+                <WorkspacePanel onClose={() => setWorkspaceOpen(false)} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );
