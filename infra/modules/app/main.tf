@@ -43,8 +43,8 @@ locals {
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "aiplatform.googleapis.com",
-    "compute.googleapis.com",        # VPC/subnet for Direct VPC egress + Cloud SQL networking
-    "redis.googleapis.com",          # Memorystore for Redis (LangGraph task queue / pub-sub)
+    "compute.googleapis.com",           # VPC/subnet for Direct VPC egress + Cloud SQL networking
+    "redis.googleapis.com",             # Memorystore for Redis (LangGraph task queue / pub-sub)
     "servicenetworking.googleapis.com", # private services access for Memorystore peering
   ]) : toset([])
 
@@ -233,8 +233,9 @@ resource "google_secret_manager_secret_iam_member" "agent_database_uri_accessor"
   member    = "serviceAccount:${google_service_account.agent_runtime.email}"
 }
 
-# Optional secrets (LANGSMITH_API_KEY, etc.). Created empty when create=true;
-# populate the version out-of-band (CI / console).
+# Optional secrets (LANGSMITH_API_KEY, etc.). Created when create=true; the
+# real value is populated out-of-band (CI / console) unless a placeholder_value
+# seeds an initial version below.
 resource "google_secret_manager_secret" "optional" {
   for_each = {
     for env_name, cfg in var.agent_optional_secrets : env_name => cfg
@@ -250,6 +251,26 @@ resource "google_secret_manager_secret" "optional" {
   }
 
   depends_on = [google_project_service.services]
+}
+
+# Optional placeholder version. Only for module-created secrets that set
+# placeholder_value. This makes the Cloud Run secret env var's "latest"
+# reference resolvable at first deploy (a version-less secret would fail the
+# revision). The real value is added later as a NEW version out-of-band, and
+# "latest" then points at it. We ignore secret_data changes so re-applying never
+# clobbers a real value that was layered on top.
+resource "google_secret_manager_secret_version" "optional_placeholder" {
+  for_each = {
+    for env_name, cfg in var.agent_optional_secrets : env_name => cfg
+    if cfg.create && cfg.placeholder_value != null
+  }
+
+  secret      = google_secret_manager_secret.optional[each.key].id
+  secret_data = each.value.placeholder_value
+
+  lifecycle {
+    ignore_changes = [secret_data, enabled]
+  }
 }
 
 # Grant the agent runtime SA accessor on every optional secret (created or

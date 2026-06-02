@@ -346,15 +346,24 @@ variable "agent_optional_secrets" {
   description = <<-EOT
     Optional secrets surfaced to the AGENT service as env vars.
     Key   = env var name exposed to the container (e.g. LANGSMITH_API_KEY).
-    Value = object describing the secret. If create=true, the module creates an
-            (empty) Secret Manager secret with this id and grants the agent
-            runtime SA accessor; populate the version out-of-band. If create=false,
-            the secret_id is assumed to already exist and the module only grants
-            accessor + wires the env var.
+    Value = object describing the secret. If create=true, the module creates a
+            Secret Manager secret with this id and grants the agent runtime SA
+            accessor. If create=false, the secret_id is assumed to already exist
+            and the module only grants accessor + wires the env var.
+
+            placeholder_value (create=true only): if set, the module seeds an
+            initial secret version with this value so the Cloud Run env var's
+            'latest' reference resolves and the service can deploy before the
+            real value exists. Use a blank/whitespace placeholder for keys the
+            app treats as "unconfigured" until populated out-of-band (the real
+            value is added as a NEW version later; 'latest' then picks it up).
+            Leave unset to create an empty secret you MUST populate before the
+            service can reference it.
   EOT
   type = map(object({
-    secret_id = string
-    create    = optional(bool, true)
+    secret_id         = string
+    create            = optional(bool, true)
+    placeholder_value = optional(string)
   }))
   default = {
     # LANGSMITH_API_KEY = { secret_id = "langsmith-api-key" }

@@ -99,16 +99,16 @@ variable "deployer_roles" {
   description = "Least-privilege project roles granted to each deployer SA in its own project (deploy Cloud Run, push images, act-as runtime SAs, read/write secrets, manage Cloud SQL for the env layer)."
   type        = list(string)
   default = [
-    "roles/run.admin",                  # deploy/update Cloud Run services
-    "roles/artifactregistry.writer",    # push images to 'containers'
-    "roles/iam.serviceAccountUser",     # actAs the runtime SAs on deploy
-    "roles/secretmanager.admin",        # manage env-layer secrets (DATABASE_URI etc.)
-    "roles/cloudsql.admin",             # env layer provisions Cloud SQL
-    "roles/redis.admin",                # env layer provisions Memorystore (Redis)
-    "roles/compute.networkAdmin",       # env layer creates the VPC/subnet for Direct VPC egress
-    "roles/serviceusage.serviceUsageAdmin", # enable required APIs from the env layer
-    "roles/storage.admin",              # read/write the env's tfstate bucket objects
-    "roles/iam.serviceAccountAdmin",    # env layer creates the runtime SAs
+    "roles/run.admin",                       # deploy/update Cloud Run services
+    "roles/artifactregistry.writer",         # push images to 'containers'
+    "roles/iam.serviceAccountUser",          # actAs the runtime SAs on deploy
+    "roles/secretmanager.admin",             # manage env-layer secrets (DATABASE_URI etc.)
+    "roles/cloudsql.admin",                  # env layer provisions Cloud SQL
+    "roles/redis.admin",                     # env layer provisions Memorystore (Redis)
+    "roles/compute.networkAdmin",            # env layer creates the VPC/subnet for Direct VPC egress
+    "roles/serviceusage.serviceUsageAdmin",  # enable required APIs from the env layer
+    "roles/storage.admin",                   # read/write the env's tfstate bucket objects
+    "roles/iam.serviceAccountAdmin",         # env layer creates the runtime SAs
     "roles/resourcemanager.projectIamAdmin", # env layer binds runtime SA project roles
   ]
 }

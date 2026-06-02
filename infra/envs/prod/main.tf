@@ -53,8 +53,8 @@ module "app" {
   #     and any model clients stay alive; allow more headroom for traffic. ---
   agent_min_instances = 1
   agent_max_instances = 8
-  web_min_instances    = 1
-  web_max_instances    = 8
+  web_min_instances   = 1
+  web_max_instances   = 8
 
   agent_cpu    = "2"
   agent_memory = "2Gi"
