@@ -174,7 +174,8 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
 
   // Determine final values to use, prioritizing URL params then defaults.
   const finalApiUrl = apiUrl || sameOriginApiUrl;
-  const finalAssistantId = assistantId || envAssistantId || DEFAULT_ASSISTANT_ID;
+  const finalAssistantId =
+    assistantId || envAssistantId || DEFAULT_ASSISTANT_ID;
 
   // If we're missing any required values, show the form
   if (!finalApiUrl || !finalAssistantId) {

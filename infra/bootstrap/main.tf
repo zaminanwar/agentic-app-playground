@@ -233,6 +233,16 @@ resource "google_project_iam_member" "deployer_prod_roles" {
   member  = "serviceAccount:${google_service_account.deployer_prod.email}"
 }
 
+# CD's single build-and-push job authenticates as the DEV deployer SA but pushes
+# the built images to BOTH projects' registries (build once, promote same image).
+# So the DEV deployer also needs writer on the PROD Artifact Registry.
+resource "google_project_iam_member" "deployer_dev_push_to_prod_ar" {
+  provider = google.prod
+  project  = var.prod_project_id
+  role     = "roles/artifactregistry.writer"
+  member   = "serviceAccount:${google_service_account.deployer_dev.email}"
+}
+
 # ---------------------------------------------------------------------------
 # Allow the GitHub repo's WIF identities to impersonate the deployer SAs.
 #

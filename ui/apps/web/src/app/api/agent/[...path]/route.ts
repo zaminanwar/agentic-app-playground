@@ -109,10 +109,10 @@ async function proxy(
   try {
     agentBaseUrl = getAgentBaseUrl();
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: (err as Error).message }),
-      { status: 500, headers: { "content-type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (err as Error).message }), {
+      status: 500,
+      headers: { "content-type": "application/json" },
+    });
   }
 
   const { path } = await ctx.params;
