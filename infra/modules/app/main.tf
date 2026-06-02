@@ -43,8 +43,8 @@ locals {
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "aiplatform.googleapis.com",
-    "compute.googleapis.com",        # VPC/subnet for Direct VPC egress + Cloud SQL networking
-    "redis.googleapis.com",          # Memorystore for Redis (LangGraph task queue / pub-sub)
+    "compute.googleapis.com",           # VPC/subnet for Direct VPC egress + Cloud SQL networking
+    "redis.googleapis.com",             # Memorystore for Redis (LangGraph task queue / pub-sub)
     "servicenetworking.googleapis.com", # private services access for Memorystore peering
   ]) : toset([])
 
