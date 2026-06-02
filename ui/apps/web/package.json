@@ -14,7 +14,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@langchain/core": "^0.3.42",
+    "@langchain/core": "^1.1.48",
     "@langchain/langgraph": "^0.2.55",
     "@langchain/langgraph-api": "^0.0.16",
     "@langchain/langgraph-cli": "^0.0.16",
