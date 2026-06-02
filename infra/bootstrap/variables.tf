@@ -14,13 +14,13 @@
 variable "dev_project_id" {
   description = "GCP project ID for the dev environment."
   type        = string
-  default     = "agentic-app-dev"
+  default     = "agenticapp-zan-dev"
 }
 
 variable "prod_project_id" {
   description = "GCP project ID for the prod environment."
   type        = string
-  default     = "agentic-app-prod"
+  default     = "agenticapp-zan-prod"
 }
 
 variable "region" {
@@ -40,13 +40,13 @@ variable "bucket_location" {
 variable "dev_state_bucket" {
   description = "GCS bucket name for DEV terraform state. Must match infra/envs/dev/backend.tf."
   type        = string
-  default     = "agentic-app-tfstate-dev"
+  default     = "agenticapp-zan-tfstate-dev"
 }
 
 variable "prod_state_bucket" {
   description = "GCS bucket name for PROD terraform state. Must match infra/envs/prod/backend.tf."
   type        = string
-  default     = "agentic-app-tfstate-prod"
+  default     = "agenticapp-zan-tfstate-prod"
 }
 
 # --- Workload Identity Federation -------------------------------------------
@@ -54,7 +54,7 @@ variable "prod_state_bucket" {
 variable "wif_project_id" {
   description = "Project that HOSTS the Workload Identity pool/provider. Defaults to the dev project; the pool can be shared across envs since each deployer SA scopes its own access."
   type        = string
-  default     = "agentic-app-dev"
+  default     = "agenticapp-zan-dev"
 }
 
 variable "wif_pool_id" {
@@ -72,8 +72,7 @@ variable "wif_provider_id" {
 variable "github_owner" {
   description = "GitHub org/user that owns the repo (the 'owner' in owner/repo)."
   type        = string
-  # TODO(decision): set to the real GitHub org/user that owns this repo.
-  default     = "your-github-org"
+  default     = "zaminanwar"
 }
 
 variable "github_repo" {

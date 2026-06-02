@@ -7,7 +7,7 @@
 #   terraform plan -var image_tag=local-dev
 # =============================================================================
 
-project_id = "agentic-app-dev"
+project_id = "agenticapp-zan-dev"
 region     = "us-central1"
 
 # Optional: LangSmith tracing flag for the agent (uncomment to enable).

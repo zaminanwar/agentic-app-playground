@@ -14,7 +14,7 @@
 
 terraform {
   backend "gcs" {
-    bucket = "agentic-app-tfstate-prod"
+    bucket = "agenticapp-zan-tfstate-prod"
     prefix = "env/prod"
   }
 }

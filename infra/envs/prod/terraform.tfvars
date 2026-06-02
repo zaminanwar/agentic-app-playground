@@ -6,7 +6,7 @@
 # GitHub 'prod' Environment manual approval. NEVER rebuild between envs.
 # =============================================================================
 
-project_id = "agentic-app-prod"
+project_id = "agenticapp-zan-prod"
 region     = "us-central1"
 
 # Optional: LangSmith tracing flag for the agent (uncomment to enable).
