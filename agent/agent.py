@@ -64,6 +64,12 @@ def internet_search(query: str, max_results: int = 5, topic: str = "general") ->
     search = TavilySearch(max_results=max_results, topic=topic)
     response = search.invoke({"query": query})
 
+    # langchain-tavily returns {"error": ...} on failure (bad key, rate limit,
+    # network) rather than raising — surface it so the agent doesn't mistake a
+    # failed search for "nothing found".
+    if isinstance(response, dict) and response.get("error"):
+        return f"Web search failed: {response['error']}"
+
     results = response.get("results", []) if isinstance(response, dict) else []
     if not results:
         return f"No results found for query: {query!r}"
