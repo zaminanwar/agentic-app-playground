@@ -47,7 +47,9 @@ def internet_search(query: str, max_results: int = 5, topic: str = "general") ->
     the agent can cite them. If TAVILY_API_KEY is not configured the tool returns
     an explanatory message instead of failing.
     """
-    if not os.environ.get("TAVILY_API_KEY"):
+    # Strip so a blank/whitespace placeholder (e.g. the value Terraform seeds
+    # into Secret Manager before the real key is populated) reads as unset.
+    if not os.environ.get("TAVILY_API_KEY", "").strip():
         return (
             "Web search is unavailable: TAVILY_API_KEY is not configured. "
             "Set it in the environment (Secret Manager in deployed envs) to "

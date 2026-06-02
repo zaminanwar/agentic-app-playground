@@ -111,3 +111,13 @@ def test_internet_search_degrades_without_api_key(
     out = agent_module.internet_search("anything")  # type: ignore[attr-defined]
     assert isinstance(out, str)
     assert "TAVILY_API_KEY" in out
+
+
+def test_internet_search_degrades_on_whitespace_placeholder(
+    agent_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A blank/whitespace placeholder key (Terraform's seed) reads as unconfigured."""
+    monkeypatch.setenv("TAVILY_API_KEY", " ")
+
+    out = agent_module.internet_search("anything")  # type: ignore[attr-defined]
+    assert "TAVILY_API_KEY" in out
