@@ -70,14 +70,13 @@ module "app" {
   agent_allow_unauthenticated = false
   web_allow_unauthenticated   = true
 
-  # --- Self-hosted LangGraph server LICENSE (REQUIRED to boot) ---
-  # The standalone langchain/langgraph-api server validates a LangGraph Platform
-  # license at startup and will NOT start without it. The module creates an empty
-  # Secret Manager secret + grants the agent runtime SA accessor; populate the
-  # version out-of-band before the first deploy (see docs/first-deploy-checklist.md).
-  # Use LANGSMITH_API_KEY instead if validating against LangSmith SaaS.
+  # --- Self-hosted server auth (Self-Hosted Lite via LangSmith) ---
+  # The standalone langchain/langgraph-api server validates at startup against
+  # LangSmith using this API key. The 'langsmith-api-key' secret + its version
+  # were created out-of-band (gcloud); the module grants the agent runtime SA
+  # accessor and injects it as the LANGSMITH_API_KEY env var.
   agent_optional_secrets = {
-    LANGGRAPH_CLOUD_LICENSE_KEY = { secret_id = "langgraph-cloud-license-key", create = true }
+    LANGSMITH_API_KEY = { secret_id = "langsmith-api-key", create = false }
   }
 
   # --- Optional LangSmith tracing (secret value populated out-of-band) ---
