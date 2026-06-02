@@ -22,8 +22,18 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { getApiKey } from "@/lib/api-key";
 import { useThreads } from "./Thread";
 import { toast } from "sonner";
+import type { Todo, AgentFiles } from "@/lib/agent-types";
 
-export type StateType = { messages: Message[]; ui?: UIMessage[] };
+// Deep Agent state surfaced to the UI. Beyond `messages`/`ui`, the deepagents
+// harness exposes the live plan (`todos`) and the virtual filesystem (`files`)
+// as graph-state channels; with streamMode "values" these arrive on
+// `stream.values` and drive the workspace panels. See lib/agent-types.ts.
+export type StateType = {
+  messages: Message[];
+  ui?: UIMessage[];
+  todos?: Todo[];
+  files?: AgentFiles;
+};
 
 const useTypedStream = useStream<
   StateType,
