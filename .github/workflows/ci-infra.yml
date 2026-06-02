@@ -1,0 +1,108 @@
+# PR-time infrastructure checks for Terraform under infra/**.
+#
+# DECISION D1: Cloud Run (and all runtime config) is owned by Terraform, so the
+# infra code is the single source of truth and MUST be gated on PRs. This
+# workflow is READ-ONLY: it runs `terraform fmt -check`, `terraform validate`,
+# and a read-only `terraform plan` against the dev environment root. It never
+# applies. Apply happens only from cd.yml on push to main.
+#
+# Auth uses Workload Identity Federation (WIF) with a deployer SA that has
+# read access to the dev tfstate bucket and read access to the dev project so
+# `plan` can refresh state. No long-lived JSON keys.
+#
+# The job 'infra-plan' is intended to be a REQUIRED status check on `main`.
+# Because this workflow is path-filtered (it does not run on PRs that don't
+# touch infra/**), a plain required check on 'infra-plan' would block ALL PRs
+# (GitHub treats a never-started required check as pending forever). The
+# 'required-checks' aggregator workflow (.github/workflows/required-checks.yml)
+# solves this: make THAT job the required check instead.
+
+name: ci-infra
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/ci-infra.yml"
+
+# Cancel superseded runs for the same PR ref (e.g. force-pushes).
+concurrency:
+  group: ci-infra-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only: only the OIDC token (for WIF) plus repo read. No write scopes, so
+# even a malicious PR cannot mutate infra — and `plan` is non-mutating anyway.
+permissions:
+  contents: read
+  id-token: write # required for Workload Identity Federation (OIDC)
+
+env:
+  TERRAFORM_VERSION: 1.9.8
+
+jobs:
+  infra-plan:
+    name: infra-plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # Plan against the dev environment root; it shares the module with prod,
+        # so fmt/validate/plan here exercises the same code path. fmt -check is
+        # run repo-wide across infra/** below.
+        working-directory: infra/envs/dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      # fmt -check is a pure-syntax gate; run it across ALL of infra/ (recursive)
+      # before anything else so a formatting nit fails fast without needing auth.
+      - name: Terraform fmt (check, recursive)
+        working-directory: infra
+        run: terraform fmt -check -recursive -diff
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          # Full WIF provider resource name (same one CD uses).
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          # READ-ONLY plan identity in the DEV project: needs read on the dev
+          # tfstate bucket (state lock + read) and Viewer-level read on the
+          # project so `plan` can refresh resource state. Grant a least-priv,
+          # plan-only SA here rather than the apply-capable deployer SA.
+          service_account: ${{ secrets.DEV_PLAN_SA }}
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        run: terraform validate -no-color
+
+      # Read-only plan. image_tag is required by the root but irrelevant to a
+      # PR-time plan, so feed a placeholder. -lock=false avoids contending with
+      # CD applies for the state lock on a read-only run. We do NOT fail the job
+      # on a non-zero "changes present" exit (-detailed-exitcode) — a plan that
+      # shows a diff is expected and informational on a PR.
+      - name: Terraform plan (read-only)
+        run: terraform plan -input=false -no-color -lock=false -var "image_tag=ci-plan-${{ github.sha }}"
+
+# =============================================================================
+# Required GitHub configuration (in addition to what cd.yml documents):
+#
+# Repository SECRETS (secrets.*):
+#   WIF_PROVIDER    (shared with cd.yml)
+#   DEV_PLAN_SA     A least-privilege, PLAN-ONLY service account in the dev
+#                   project, e.g. gh-planner@agentic-app-dev.iam.gserviceaccount.com.
+#                   Needs: read on the dev tfstate bucket (objectViewer +
+#                   ability to take/read the state lock), and roles/viewer (or a
+#                   tighter read-only custom role) on the dev project so plan can
+#                   refresh. If you prefer not to add a second SA, you may reuse
+#                   DEV_DEPLOYER_SA, but a dedicated plan-only SA is safer for a
+#                   PR-triggered workflow. Defined/granted in Terraform bootstrap.
+#
+# Make the 'required-checks' aggregator (NOT 'infra-plan' directly) the required
+# status check on main — see required-checks.yml.
+# =============================================================================

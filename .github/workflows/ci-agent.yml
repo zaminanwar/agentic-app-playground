@@ -1,0 +1,71 @@
+# CI for the Python LangGraph agent (agent/).
+# Required status check for branch protection on `main`.
+# Lint + format-check + typecheck + tests ONLY. No build/auth/GCP steps live here.
+name: ci-agent
+
+on:
+  pull_request:
+    paths:
+      - "agent/**"
+      - ".github/workflows/ci-agent.yml"
+  push:
+    branches: [main]
+    paths:
+      - "agent/**"
+      - ".github/workflows/ci-agent.yml"
+
+# Cancel superseded runs for the same ref (e.g. force-pushes to a PR branch).
+concurrency:
+  group: ci-agent-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# CI is read-only; do not grant write scopes.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # The agent is its own project rooted at agent/.
+    working-directory: agent
+
+jobs:
+  agent-checks:
+    name: agent lint, format, typecheck, test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # uv manages the Python toolchain + dependency resolution. It reads the
+      # version pin from agent/pyproject.toml (`requires-python`) / .python-version.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          # Cache invalidates when the lock/manifest changes.
+          cache-dependency-glob: |
+            agent/uv.lock
+            agent/pyproject.toml
+
+      - name: Set up Python
+        # `uv python install` honours requires-python from pyproject.toml.
+        run: uv python install
+
+      # Installs the project plus the assumed `dev` extra (ruff, mypy, pytest).
+      # TODO(infra): this assumes agent/pyproject.toml exists declaring
+      #   [project.optional-dependencies] dev = ["ruff", "mypy", "pytest", ...]
+      #   and replaces requirements.txt. Owned by the Python-packaging agent.
+      - name: Install dependencies (with dev extra)
+        run: uv sync --extra dev
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Format check (ruff format --check)
+        run: uv run ruff format --check .
+
+      - name: Typecheck (mypy)
+        run: uv run mypy .
+
+      - name: Test (pytest)
+        run: uv run pytest

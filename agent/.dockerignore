@@ -1,0 +1,29 @@
+# Python virtualenvs / caches
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local secrets / env files (never bake into the image)
+.env
+.env.*
+
+# LangGraph local dev server state (in-memory dev runtime artifacts)
+.langgraph_api/
+
+# Tests (not needed in the runtime image)
+tests/
+test/
+*_test.py
+test_*.py
+
+# Tooling / VCS noise
+.git/
+.gitignore
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.md

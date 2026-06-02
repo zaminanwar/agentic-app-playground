@@ -1,0 +1,29 @@
+# CODEOWNERS — default reviewers, auto-requested on matching PRs.
+#
+# TODO: replace the placeholder team handle `@your-org/maintainers` (and the
+# more specific handles below) with real GitHub team/user handles for this org.
+# Teams must have write access to this repo for ownership to take effect.
+#
+# Note: the prod deploy gate uses a separate `@your-org/release-approvers` team,
+# set as the Required reviewers on the GitHub `prod` Environment (not here). See
+# docs/first-deploy-checklist.md for every placeholder to replace before deploy.
+#
+# Order matters: the LAST matching pattern wins. Keep the catch-all first.
+
+# Catch-all: every file has an owner by default.
+*                       @your-org/maintainers
+
+# Python LangGraph agent.
+/agent/                 @your-org/agent-team
+
+# Next.js UI (pnpm + turbo workspace; app at ui/apps/web).
+/ui/                    @your-org/frontend-team
+
+# Infrastructure as code (Terraform: GCP projects, Cloud Run, WIF, etc.).
+/infra/                 @your-org/platform-team
+
+# CI/CD, governance, and repo automation — guard changes carefully.
+/.github/               @your-org/platform-team
+
+# Cross-cutting docs.
+/docs/                  @your-org/maintainers

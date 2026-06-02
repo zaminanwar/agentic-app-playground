@@ -1,0 +1,31 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Environment / secrets
+.env
+**/.env
+
+# LangGraph dev server persistence
+.langgraph_api/
+**/.langgraph_api/
+
+# Node / Next.js (UI)
+node_modules/
+.next/
+ui/**/.next/
+
+# Terraform (commit .terraform.lock.hcl and *.tfvars; never commit state/cache)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Local editor / agent settings (per-user)
+.claude/settings.local.json

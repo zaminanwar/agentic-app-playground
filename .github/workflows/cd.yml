@@ -1,0 +1,254 @@
+# Continuous Delivery — build once, promote the SAME immutable image (by git
+# SHA) from dev to prod behind a manual approval.
+#
+# DECISION D1 (Terraform owns Cloud Run): this workflow NEVER calls the
+# deploy-cloudrun action. Cloud Run services — and all of their runtime config
+# (env vars, secrets, service account, probes, VPC access) — are managed solely
+# by Terraform under infra/. CD's only jobs are:
+#   1) build BOTH images once and push them by SHA to Artifact Registry, and
+#   2) run `terraform apply -var image_tag=<sha>` per environment, which is the
+#      single source of truth that rolls the new image onto Cloud Run.
+# There is therefore NO DATABASE_URI secret flag, NO runtime-SA flag, and NO
+# NEXT_PUBLIC_API_URL build arg here — Terraform owns runtime config and the web
+# image is env-agnostic (D3: the agent URL is a server-side RUNTIME env var set
+# by Terraform, not baked at build time).
+#
+# Auth to GCP uses Workload Identity Federation (WIF) — NO long-lived JSON keys.
+# Every literal GCP value (project ids, region, WIF provider, deployer SAs) is
+# supplied through GitHub Actions variables/secrets and per-Environment
+# overrides, NOT hard-coded. See "Required GitHub configuration" at the bottom.
+#
+# Job graph:
+#   build-and-push -> builds BOTH images once, tags with ${{ github.sha }},
+#                     pushes to Artifact Registry in BOTH projects (so each
+#                     project deploys from its own registry; prod never pulls
+#                     from a dev-owned registry).
+#   deploy-dev     -> needs build-and-push; Environment 'dev' (no approval);
+#                     `terraform apply` against infra/envs/dev with the new SHA.
+#   deploy-prod    -> needs deploy-dev; Environment 'prod' (manual-approval
+#                     protection rule lives on this Environment); `terraform
+#                     apply` against infra/envs/prod with the SAME SHA. Never
+#                     rebuilds.
+
+name: cd
+
+on:
+  push:
+    branches: [main]
+
+# One in-flight delivery of main at a time; let a running deploy finish.
+concurrency:
+  group: cd-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # required for Workload Identity Federation (OIDC)
+
+env:
+  REGION: ${{ vars.GCP_REGION }} # e.g. us-central1 (Terraform var: region)
+  ARTIFACT_REPO: containers # Artifact Registry Docker repo name (per project)
+  # Pin the Terraform CLI used for apply; keep in sync with required_version in
+  # infra/modules/app/versions.tf.
+  TERRAFORM_VERSION: 1.9.8
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) Build BOTH images ONCE, tag with the immutable git SHA, push to BOTH
+  #    projects' Artifact Registry.
+  #
+  #    D3: the web image is built WITHOUT NEXT_PUBLIC_API_URL. The agent URL is
+  #    injected at runtime (server-side AGENT_URL env var set by Terraform), so
+  #    the identical web image is genuinely promotable dev -> prod with no baked
+  #    environment URL.
+  # ---------------------------------------------------------------------------
+  build-and-push:
+    name: Build & push images (by SHA)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          # Full WIF provider resource name, e.g.
+          # projects/<DEV_PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          # Deployer SA in the DEV project; it is granted artifactregistry.writer
+          # in BOTH project registries so a single login can push to both.
+          service_account: ${{ secrets.DEV_DEPLOYER_SA }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push agent image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./agent
+          push: true
+          # Push to BOTH project registries under the same immutable SHA tag.
+          tags: |
+            ${{ env.REGION }}-docker.pkg.dev/${{ vars.DEV_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/agent:${{ github.sha }}
+            ${{ env.REGION }}-docker.pkg.dev/${{ vars.PROD_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/agent:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ui
+          # The Next.js app lives at ui/apps/web; its Dockerfile builds the
+          # standalone server but expects the workspace root (ui/) as context.
+          file: ./ui/apps/web/Dockerfile
+          push: true
+          # D3: NO build-args. The web image is env-agnostic — it carries no
+          # agent URL. The agent URL is supplied at RUNTIME by Terraform as the
+          # server-side AGENT_URL env var; the browser only ever calls the web
+          # service's same-origin BFF route (/api/agent), which proxies to the
+          # private agent service.
+          tags: |
+            ${{ env.REGION }}-docker.pkg.dev/${{ vars.DEV_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/web:${{ github.sha }}
+            ${{ env.REGION }}-docker.pkg.dev/${{ vars.PROD_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/web:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # 2) Roll the new SHA onto Cloud Run in the DEV project via Terraform. No
+  #    approval. Env separation is by PROJECT — service names are identical
+  #    across envs; only the GCS backend prefix / project differ.
+  #
+  #    `terraform apply -var image_tag=<sha>` is the ONLY deploy mechanism.
+  #    Runtime env vars, secrets, the runtime service account, probes and VPC
+  #    access all live in Terraform (single source of truth) — none are passed
+  #    from this workflow.
+  # ---------------------------------------------------------------------------
+  deploy-dev:
+    name: Deploy to dev (terraform apply)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+    defaults:
+      run:
+        working-directory: infra/envs/dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          # Deployer SA in the DEV project. For `terraform apply` it needs write
+          # access to the dev GCS tfstate bucket plus the GCP roles to manage
+          # Cloud Run / IAM / networking / Cloud SQL / Memorystore in the dev
+          # project (see "Required GitHub configuration" below).
+          service_account: ${{ secrets.DEV_DEPLOYER_SA }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform apply (image_tag = git SHA)
+        run: terraform apply -auto-approve -input=false -var "image_tag=${{ github.sha }}"
+
+  # ---------------------------------------------------------------------------
+  # 3) PROMOTE the SAME SHA to PROD via Terraform. The 'prod' Environment
+  #    carries the manual-approval protection rule, so this job pauses for a
+  #    human reviewer. Never rebuilds — applies the identical image_tag against
+  #    the prod environment root (prod registry, prod backend prefix).
+  # ---------------------------------------------------------------------------
+  deploy-prod:
+    name: Promote to prod (terraform apply)
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    environment:
+      name: prod
+    defaults:
+      run:
+        working-directory: infra/envs/prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          # Deployer SA in the PROD project (least privilege, prod-scoped).
+          service_account: ${{ secrets.PROD_DEPLOYER_SA }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform apply (SAME git SHA promoted from dev)
+        run: terraform apply -auto-approve -input=false -var "image_tag=${{ github.sha }}"
+
+# =============================================================================
+# Required GitHub configuration (set under Settings -> Secrets and variables ->
+# Actions, and Settings -> Environments). Names below are referenced verbatim
+# above. Repo-level values are shared; per-Environment values override them.
+#
+# Repository VARIABLES (vars.*) — non-sensitive:
+#   GCP_REGION         us-central1                 (Terraform var: region)
+#   DEV_PROJECT_ID     agentic-app-dev             (Terraform var: project_id, dev)
+#   PROD_PROJECT_ID    agentic-app-prod            (Terraform var: project_id, prod)
+#
+#   NOTE (D3): DEV_AGENT_URL is GONE. The agent URL is no longer baked into the
+#   web image; Terraform sets it as the web service's runtime AGENT_URL env var
+#   from the agent module's Cloud Run URL output. Nothing in CD needs it.
+#
+# Repository SECRETS (secrets.*) — sensitive / identity:
+#   WIF_PROVIDER       projects/<DEV_PROJECT_NUMBER>/locations/global/
+#                      workloadIdentityPools/github-pool/providers/github-provider
+#   DEV_DEPLOYER_SA    gh-deployer@agentic-app-dev.iam.gserviceaccount.com
+#   PROD_DEPLOYER_SA   gh-deployer@agentic-app-prod.iam.gserviceaccount.com
+#
+#   The deployer SAs now run `terraform apply`, so each needs (in its own
+#   project): roles/storage.objectAdmin on its tfstate bucket
+#   (agentic-app-tfstate-dev / -prod) and sufficient GCP roles for Terraform to
+#   manage everything in infra/modules/app — Cloud Run, service-account
+#   creation + IAM bindings (incl. granting run-web the run.invoker on agent),
+#   Artifact Registry, Secret Manager, Cloud SQL, Memorystore (Redis), and
+#   Serverless VPC Access / networking. Those bindings are defined in Terraform
+#   (bootstrap), not here.
+#
+#   REMOVED (Terraform now owns runtime config — D1):
+#     DEV_AGENT_RUNTIME_SA / DEV_WEB_RUNTIME_SA
+#     PROD_AGENT_RUNTIME_SA / PROD_WEB_RUNTIME_SA
+#       -> runtime SAs (run-agent@ / run-web@) are CREATED and attached to the
+#          services by Terraform.
+#
+# Secret Manager secrets:
+#   Still required, but referenced by NAME inside Terraform (the module wires
+#   them onto Cloud Run), NOT by this workflow. There is no longer a
+#   DEV_DATABASE_URI / PROD_DATABASE_URI flag in CD. See infra/ for the exact
+#   secret names (DATABASE_URI for Cloud SQL Postgres, REDIS_URI for Memorystore,
+#   and the LangGraph license key).
+#
+# ENVIRONMENTS:
+#   dev   — no protection rules (auto-deploy).
+#   prod  — add a "Required reviewers" protection rule (this is the manual
+#           approval gate for the promotion). Optionally restrict to 'main'.
+#
+# NOTE: the WIF provider's attribute condition / SA IAM bindings must allow this
+# repository (and, ideally, the 'main' ref / 'prod' environment) to impersonate
+# each deployer SA. That binding is defined in Terraform, not here.
+# =============================================================================

@@ -1,0 +1,79 @@
+# CI for the Next.js UI (ui/, pnpm + turbo workspace; app at ui/apps/web).
+# Required status check for branch protection on `main`.
+# Lint + format-check + typecheck + build ONLY. No deploy/auth/GCP steps here.
+name: ci-ui
+
+on:
+  pull_request:
+    paths:
+      - "ui/**"
+      - ".github/workflows/ci-ui.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ui/**"
+      - ".github/workflows/ci-ui.yml"
+
+# Cancel superseded runs for the same ref (e.g. force-pushes to a PR branch).
+concurrency:
+  group: ci-ui-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# CI is read-only; do not grant write scopes.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # The pnpm workspace is rooted at ui/.
+    working-directory: ui
+
+jobs:
+  ui-checks:
+    name: ui lint, format, typecheck, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm version is pinned by the `packageManager` field in ui/package.json
+      # (pnpm@10.6.3). setup-pnpm reads it from there, so no duplicate version.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ui/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          # Caches the pnpm content-addressable store, keyed off the lockfile.
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Turbo fans `lint` out across the workspace (root `lint` -> web `next lint`).
+      - name: Lint
+        run: pnpm lint
+
+      # Root package.json has no `format:check` script; the web app does
+      # (`prettier --check .`). Run it via the workspace filter so we check the
+      # actual app sources.
+      - name: Format check
+        run: pnpm --filter web format:check
+
+      # Type-only check. The web tsconfig sets noEmit, so `tsc --noEmit` is a
+      # pure typecheck independent of the production build.
+      - name: Typecheck (tsc --noEmit)
+        run: pnpm --filter web exec tsc --noEmit
+
+      # Production build of the Next.js standalone server (turbo build). The web
+      # image is env-agnostic (D3): the agent URL is a server-side runtime var
+      # (AGENT_URL) read by the same-origin BFF proxy, NOT a build-time
+      # NEXT_PUBLIC_*. Only the fixed assistant id is inlined at build.
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_ASSISTANT_ID: agent

@@ -1,0 +1,84 @@
+# Single stable "required status check" for branch protection on `main`.
+#
+# WHY THIS EXISTS
+# ---------------
+# Our real CI workflows are PATH-FILTERED so they only burn CI minutes on
+# relevant PRs:
+#   - ci-agent.yml  -> job "agent lint, format, typecheck, test"  (id: agent-checks)
+#   - ci-ui.yml     -> job "ui lint, format, typecheck, build"    (id: ui-checks)
+#   - ci-infra.yml  -> job "infra-plan"                            (id: infra-plan)
+#
+# GitHub branch protection treats a REQUIRED check that never starts as
+# perpetually "pending" — so listing any single path-filtered job as required
+# would DEADLOCK every PR that doesn't touch that path. To get a required check
+# that is always reportable, branch protection should require ONLY the
+# 'all-required-checks' context below. This workflow runs on EVERY PR (no path
+# filter), inspects the results of the path-filtered workflows for this commit,
+# and passes iff none of them failed (skipped/not-run counts as OK).
+#
+# BRANCH PROTECTION: set the single required status check to:  all-required-checks
+
+name: required-checks
+
+on:
+  pull_request:
+
+concurrency:
+  group: required-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: read
+  actions: read
+
+jobs:
+  all-required-checks:
+    name: all-required-checks
+    runs-on: ubuntu-latest
+    steps:
+      # Wait for the sibling path-filtered workflows (ci-agent, ci-ui, ci-infra)
+      # to reach a conclusion for THIS head SHA, then gate on their results.
+      # A workflow that was skipped (its paths weren't touched) is treated as a
+      # pass, so PRs that don't touch a given area are not blocked.
+      - name: Gate on path-filtered CI workflows
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.pull_request.head.sha;
+            // Workflow file names whose conclusions gate this required check.
+            const gated = ['ci-agent.yml', 'ci-ui.yml', 'ci-infra.yml'];
+            // Treat these conclusions as non-blocking.
+            const ok = new Set(['success', 'skipped', 'neutral', null]);
+
+            const failures = [];
+            for (const wf of gated) {
+              // Poll until each workflow run for this SHA is completed (or absent).
+              let run = null;
+              for (let attempt = 0; attempt < 60; attempt++) {
+                const { data } = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: wf,
+                  head_sha: sha,
+                  per_page: 1,
+                });
+                run = data.workflow_runs[0] || null;
+                // No run for this SHA: workflow was path-filtered out -> OK.
+                if (!run) break;
+                if (run.status === 'completed') break;
+                core.info(`waiting for ${wf} (status=${run.status})...`);
+                await new Promise(r => setTimeout(r, 10000));
+              }
+              if (run && run.status === 'completed' && !ok.has(run.conclusion)) {
+                failures.push(`${wf} -> ${run.conclusion}`);
+              } else if (run && run.status !== 'completed') {
+                failures.push(`${wf} -> timed out waiting (status=${run.status})`);
+              }
+            }
+
+            if (failures.length) {
+              core.setFailed(`Required CI workflow(s) did not pass:\n - ${failures.join('\n - ')}`);
+            } else {
+              core.info('All gated CI workflows passed or were skipped.');
+            }
