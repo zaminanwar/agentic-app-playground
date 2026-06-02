@@ -44,7 +44,7 @@ jobs:
           package_json_file: ui/package.json
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           # Caches the pnpm content-addressable store, keyed off the lockfile.
