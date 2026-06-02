@@ -16,7 +16,7 @@ license = { text = "Proprietary" }
 # and the notes for the lock workflow.
 dependencies = [
     "langchain>=1.0,<2.0",
-    "langchain-google-genai>=4.2,<5.0",
+    "langchain-google-genai>=4.2.4,<5.0",
     "langgraph>=1.0,<2.0",
     # Deep Agents harness (planning, virtual filesystem, subagents) on top of
     # create_agent — this is what builds the compiled `agent` graph.

@@ -30,7 +30,7 @@
 # installs (without hash verification).
 
 langchain>=1.0,<2.0
-langchain-google-genai>=4.2,<5.0
+langchain-google-genai>=4.2.4,<5.0
 langgraph>=1.0,<2.0
 deepagents>=0.6,<0.7
 langchain-tavily>=0.2,<0.3
