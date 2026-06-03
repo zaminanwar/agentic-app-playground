@@ -1,4 +1,7 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { Download, FileText, FileCode2, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MarkdownText } from "../markdown-text";
@@ -10,10 +13,23 @@ import {
   type AgentFiles,
 } from "@/lib/agent-types";
 
-const REPORT_PATH = "final_report.md";
+// OpenUI report renderer is client-only (its <Renderer> touches `document`),
+// so load it with ssr:false.
+const OpenUIReportView = dynamic(
+  () => import("@/components/openui/openui-report-view"),
+  { ssr: false },
+);
+
+// The agent writes the report as an interactive openui-lang dashboard
+// (`final_report.ui`, preferred) alongside the markdown source.
+const REPORT_PATHS = ["final_report.ui", "final_report.md"];
+
+function isOpenUIPath(path: string): boolean {
+  return path.endsWith(".ui");
+}
 
 function isReport(path: string): boolean {
-  return path === REPORT_PATH || path.endsWith(`/${REPORT_PATH}`);
+  return REPORT_PATHS.some((r) => path === r || path.endsWith(`/${r}`));
 }
 
 /** Sort: the report first, then the rest alphabetically. */
@@ -47,7 +63,7 @@ export function FilesPanel({ files }: { files: AgentFiles }) {
       return;
     }
     if (!selected || !paths.includes(selected)) {
-      setSelected(paths.find(isReport) ?? paths[0]);
+      setSelected(paths.find(isOpenUIPath) ?? paths.find(isReport) ?? paths[0]);
     }
   }, [paths, selected]);
 
@@ -63,6 +79,7 @@ export function FilesPanel({ files }: { files: AgentFiles }) {
   const activePath = selected && files[selected] ? selected : paths[0];
   const activeFile = files[activePath];
   const { text, isBinary } = decodeFileContent(activeFile);
+  const renderOpenUI = isOpenUIPath(activePath) && !isBinary;
   const renderMarkdown = isMarkdownPath(activePath) && !isBinary;
 
   return (
@@ -122,6 +139,8 @@ export function FilesPanel({ files }: { files: AgentFiles }) {
             <p className="py-4 text-sm text-muted-foreground">
               Binary file ({activeFile.encoding}) — preview unavailable.
             </p>
+          ) : renderOpenUI ? (
+            <OpenUIReportView source={text} />
           ) : renderMarkdown ? (
             <MarkdownText>{text}</MarkdownText>
           ) : (

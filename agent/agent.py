@@ -140,6 +140,79 @@ critique_subagent: SubAgent = {
 }
 
 
+# Concise `openui-lang` guide for the report-designer subagent. `openui-lang` is
+# a declarative UI DSL (from @openuidev/react-ui); the web app renders the file
+# written below through OpenUI's <Renderer>, turning the report into an
+# interactive dashboard instead of a wall of markdown. Keep this in sync with the
+# frontend library version (@openuidev/react-ui pinned in ui/apps/web).
+REPORT_UI_GUIDE = """\
+`openui-lang` rules:
+- Output ONLY openui-lang. No prose, no code fences.
+- One statement per line: `identifier = Expression`. Identifiers are camelCase.
+- Define `root = Stack([...])` FIRST (so the shell renders), then define each part below it.
+- Strings use double quotes; numbers are bare; arrays use [].
+
+Use ONLY these components (? marks optional args):
+- Stack(children[], direction?, gap?, align?, justify?, wrap?) — flex layout.
+  direction "row"|"column"; gap "none"|"xs"|"s"|"m"|"l"|"xl".
+- Card(children[], variant?) — styled box. variant "card"|"sunk"|"clear".
+  Cards in a "row" Stack share the row width.
+- CardHeader(title, subtitle?) — heading.
+- TextContent(text, size?) — text, markdown ok. size "small"|"default"|"large"|"large-heavy".
+- MarkDownRenderer(markdown, variant?) — render a markdown block.
+- Callout(variant, title, description) — highlighted note.
+  variant "info"|"warning"|"success"|"error"|"neutral".
+- Table(columns[]) — COLUMN-oriented. Each column is Col(label, dataArray, type?).
+  type "string"|"number".
+- Series(name, numbers[]).
+- BarChart(labels[], series[], variant?, xLabel?, yLabel?) — variant "grouped"|"stacked".
+- LineChart(labels[], series[], variant?, xLabel?, yLabel?) — variant "linear"|"natural"|"step".
+- Button(label) — clicking sends the label to the assistant (use for follow-ups).
+  Buttons(buttons[]) groups several.
+
+Example:
+root = Stack([header, summary, kpis, trendCard, sourcesCard, takeaway, explore])
+header = CardHeader("State of X — 2026", "Synthesis of 5 sources")
+summary = MarkDownRenderer("## Executive summary\\n\\nKey finding in **bold**...", "card")
+kpi1 = Card([CardHeader("42%", "Adoption"), TextContent("+12% YoY", "small")], "sunk")
+kpi2 = Card([CardHeader("$3.1B", "Market")], "sunk")
+kpis = Stack([kpi1, kpi2], "row", "m", "stretch", "start", true)
+labels = ["2024", "2025", "2026"]
+s1 = Series("Adoption", [18, 30, 42])
+trendCard = Card([CardHeader("Adoption over time"), LineChart(labels, [s1], "natural")])
+srcNames = ["Source A", "Source B"]
+srcConf = ["High", "Medium"]
+srcTable = Table([Col("Source", srcNames), Col("Confidence", srcConf)])
+sourcesCard = Card([CardHeader("Sources"), srcTable])
+takeaway = Callout("success", "Bottom line", "One-sentence takeaway.")
+b1 = Button("Break this down by region")
+explore = Card([CardHeader("Explore further"), Buttons([b1])], "sunk")
+"""
+
+
+report_designer_subagent: SubAgent = {
+    "name": "report-designer",
+    "description": (
+        "Designs an interactive dashboard version of the finished report, "
+        "written as openui-lang to `final_report.ui`. Use as the LAST step, "
+        "after `final_report.md` is complete and has been reviewed."
+    ),
+    "system_prompt": (
+        "You are a data-visualization report designer. Read the finished report "
+        "at `final_report.md` with `read_file`, then re-express it as an "
+        "interactive, data-rich dashboard in openui-lang and write that "
+        "openui-lang to `final_report.ui` with `write_file`.\n\n"
+        "Lead with a title (CardHeader) and a short executive summary "
+        "(MarkDownRenderer). Then add KPI cards for the most important numbers, a "
+        "chart if the report has comparable figures (use realistic values drawn "
+        "from the report), a Table of sources with a confidence column, a Callout "
+        "with the bottom line, and 2-3 Buttons of natural follow-up questions. "
+        "Use ONLY facts and figures actually present in the report — never invent "
+        "data. Write only the openui-lang to the file.\n\n" + REPORT_UI_GUIDE
+    ),
+}
+
+
 ORCHESTRATOR_PROMPT = """You are an expert research orchestrator. Your job is to \
 answer the user's question with a thorough, well-sourced report.
 
@@ -153,7 +226,10 @@ independent searches in parallel where possible.
 "## Sources" section listing the URLs you relied on.
 4. Ask the `critique-agent` subagent to review `final_report.md`. Address its \
 feedback by revising the file (run more research if it found gaps).
-5. When the report is solid, reply to the user with the final report contents.
+5. When the report is solid, delegate to the `report-designer` subagent via the \
+`task` tool to produce an interactive dashboard version at `final_report.ui`.
+6. Reply to the user with the final report contents (the Markdown from \
+`final_report.md`).
 
 Be rigorous: only state what the sources support, and always cite them. If web \
 search is unavailable, say so plainly rather than inventing facts."""
@@ -163,7 +239,7 @@ agent = create_deep_agent(
     model=model,
     tools=[internet_search],
     system_prompt=ORCHESTRATOR_PROMPT,
-    subagents=[research_subagent, critique_subagent],
+    subagents=[research_subagent, critique_subagent, report_designer_subagent],
 )
 
 
