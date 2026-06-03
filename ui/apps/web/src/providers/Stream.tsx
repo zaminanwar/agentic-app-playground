@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { type Message } from "@langchain/langgraph-sdk";
+import { type SubagentStreamInterface } from "@langchain/langgraph-sdk/react";
 import {
   uiMessageReducer,
   type UIMessage,
@@ -28,6 +29,12 @@ import type { Todo, AgentFiles } from "@/lib/agent-types";
 // harness exposes the live plan (`todos`) and the virtual filesystem (`files`)
 // as graph-state channels; with streamMode "values" these arrive on
 // `stream.values` and drive the workspace panels. See lib/agent-types.ts.
+//
+// Subagent streaming: the v1 `@langchain/langgraph-sdk/react` useStream natively
+// exposes `stream.subagents` / `getSubagent(toolCallId)` — live, namespace-scoped
+// streams for each `task` delegation (status + messages + tool calls). No
+// separate `@langchain/react` package or selector hooks are needed; the subagent
+// cards read these straight off this same stream (see messages/subagent-card.tsx).
 export type StateType = {
   messages: Message[];
   ui?: UIMessage[];
@@ -46,7 +53,24 @@ const useTypedStream = useStream<
   }
 >;
 
-type StreamContextType = ReturnType<typeof useTypedStream>;
+/** A live subagent stream for one `task` delegation. */
+export type SubagentStream = SubagentStreamInterface;
+
+// The deepagents subagent surface (`subagents` / `getSubagent` / …) is populated
+// at runtime by the v1 useStream hook, but TypeScript only narrows the return to
+// expose it when the stream is typed against a DeepAgent (`useStream<typeof
+// agent>`). That inference is unavailable here because the agent is a Python
+// graph, so our plain `StateType` resolves to the base stream interface. Declare
+// the accessors we consume so the typed context exposes them (widened once, at
+// the provider, where the runtime guarantees they exist).
+type SubagentAccessors = {
+  subagents: Map<string, SubagentStream>;
+  activeSubagents: SubagentStream[];
+  getSubagent: (toolCallId: string) => SubagentStream | undefined;
+  getSubagentsByMessage: (messageId: string) => SubagentStream[];
+};
+
+type StreamContextType = ReturnType<typeof useTypedStream> & SubagentAccessors;
 const StreamContext = createContext<StreamContextType | undefined>(undefined);
 
 async function sleep(ms = 4000) {
@@ -124,7 +148,8 @@ const StreamSession = ({
   }, [apiKey, apiUrl]);
 
   return (
-    <StreamContext.Provider value={streamValue}>
+    // Widen to expose the runtime-present subagent accessors (see SubagentAccessors).
+    <StreamContext.Provider value={streamValue as StreamContextType}>
       {children}
     </StreamContext.Provider>
   );

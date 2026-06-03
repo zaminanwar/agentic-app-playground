@@ -41,7 +41,9 @@ export function baseMessageObject(item: unknown): string {
     if ("type" in item) {
       return `${item.type}:${contentText ? ` ${contentText}` : ""}${toolCallText ? ` - Tool calls: ${toolCallText}` : ""}`;
     } else if ("_getType" in item) {
-      return `${item._getType()}:${contentText ? ` ${contentText}` : ""}${toolCallText ? ` - Tool calls: ${toolCallText}` : ""}`;
+      // core 1.x BaseMessage always carries `.type` (handled above), so this
+      // legacy `_getType()` branch is unreachable by types; cast to keep the guard.
+      return `${(item as { _getType(): string })._getType()}:${contentText ? ` ${contentText}` : ""}${toolCallText ? ` - Tool calls: ${toolCallText}` : ""}`;
     }
   } else if (
     typeof item === "object" &&

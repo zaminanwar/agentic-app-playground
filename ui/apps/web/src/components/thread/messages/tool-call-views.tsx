@@ -8,6 +8,7 @@ import {
   Search,
 } from "lucide-react";
 import { classifyToolCall, fileBasename } from "@/lib/agent-types";
+import { useStreamContext } from "@/providers/Stream";
 import { ToolCalls } from "./tool-calls";
 import { SubagentCard } from "./subagent-card";
 
@@ -71,14 +72,37 @@ function HousekeepingChips({ toolCalls }: { toolCalls: ToolCall[] }) {
   );
 }
 
+/** Compact "N/M complete" row shown when a turn delegates to several subagents. */
+function SubagentProgress({ done, total }: { done: number; total: number }) {
+  if (total < 2) return null;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return (
+    <div className="max-w-2xl space-y-1">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>Subagent progress</span>
+        <span>
+          {done}/{total} complete
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-blue-500 transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 /**
  * Renders an AI message's tool calls with the right view per kind:
- *   - `task`        -> SubagentCard (delegation made visible)
+ *   - `task`        -> SubagentCard (live delegation made visible)
  *   - housekeeping  -> compact chips (plan/filesystem effects live in panels)
  *   - everything else -> the generic ToolCalls table
  *
- * `resultsById` maps tool_call_id -> the tool result message so delegation
- * cards can show each subagent's returned report.
+ * Each `task` call is matched to its live subagent stream (v1 SDK
+ * `stream.getSubagent(toolCallId)`), falling back to `resultsById`
+ * (tool_call_id -> result message) for replayed history without a live stream.
  */
 export function ToolCallViews({
   toolCalls,
@@ -87,6 +111,8 @@ export function ToolCallViews({
   toolCalls: AIMessage["tool_calls"];
   resultsById: Map<string, ToolMessage>;
 }) {
+  const { getSubagent } = useStreamContext();
+
   if (!toolCalls || toolCalls.length === 0) return null;
 
   const taskCalls = toolCalls.filter(
@@ -97,16 +123,30 @@ export function ToolCallViews({
   );
   const other = toolCalls.filter((tc) => classifyToolCall(tc.name) === "other");
 
+  // Pair each task call with its live subagent (if any) so we can show status
+  // and a per-turn progress summary.
+  const tasks = taskCalls.map((tc) => ({
+    tc,
+    subagent: tc.id ? getSubagent(tc.id) : undefined,
+    result: tc.id ? resultsById.get(tc.id) : undefined,
+  }));
+  const doneCount = tasks.filter(
+    ({ subagent, result }) =>
+      subagent?.status === "complete" || (!subagent && !!result),
+  ).length;
+
   return (
     <div className="flex w-full flex-col gap-3">
-      {taskCalls.map((tc, i) => {
+      <SubagentProgress done={doneCount} total={tasks.length} />
+      {tasks.map(({ tc, subagent, result }, i) => {
         const args = (tc.args ?? {}) as Record<string, any>;
         return (
           <SubagentCard
             key={tc.id ?? `task-${i}`}
             subagentType={String(args.subagent_type ?? "subagent")}
             description={String(args.description ?? "")}
-            result={tc.id ? resultsById.get(tc.id) : undefined}
+            subagent={subagent}
+            result={result}
           />
         );
       })}

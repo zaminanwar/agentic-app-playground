@@ -24,7 +24,9 @@ const messageTypeToLabel = (message: BaseMessage) => {
   if ("type" in message) {
     type = message.type as string;
   } else {
-    type = message._getType();
+    // core 1.x BaseMessage always carries `.type`, so this legacy `_getType()`
+    // fallback is unreachable by types; cast to keep the runtime guard.
+    type = (message as { _getType(): string })._getType();
   }
 
   switch (type) {

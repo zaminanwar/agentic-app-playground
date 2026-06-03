@@ -27,7 +27,12 @@
     "prettier": "^3.3.3"
   },
   "resolutions": {
-    "@langchain/core": "^0.3.42"
+    "@langchain/core": "^1.1.48"
+  },
+  "pnpm": {
+    "overrides": {
+      "@langchain/core": "^1.1.48"
+    }
   },
   "packageManager": "pnpm@10.6.3"
 }
