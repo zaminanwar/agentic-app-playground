@@ -85,6 +85,8 @@ export default function useInterruptedActions({
       thread.submit(
         {},
         {
+          streamMode: ["values", "messages-tuple"],
+          streamSubgraphs: true,
           command: {
             resume: response,
           },
