@@ -40,7 +40,11 @@ function CustomComponent({
       {customComponents.map((customComponent) => (
         <LoadExternalComponent
           key={customComponent.id}
-          stream={thread}
+          // v1 SDK: LoadExternalComponent's `stream` prop expects the loosely
+          // typed BaseStream<Record<string, unknown>>; our typed stream
+          // (StateType) is invariantly incompatible. The runtime contract is
+          // unchanged, so widen here rather than untyping the whole stream.
+          stream={thread as never}
           message={customComponent}
           meta={{ ui: customComponent }}
         />

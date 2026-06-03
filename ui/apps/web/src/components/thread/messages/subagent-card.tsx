@@ -7,11 +7,19 @@ import {
   Loader2,
   Telescope,
   CheckCircle2,
+  TriangleAlert,
 } from "lucide-react";
-import type { ToolMessage } from "@langchain/langgraph-sdk";
+import type { Message, ToolMessage } from "@langchain/langgraph-sdk";
+import type {
+  SubagentStatus,
+  SubagentStreamInterface,
+} from "@langchain/langgraph-sdk/react";
 import { cn } from "@/lib/utils";
 import { MarkdownText } from "../markdown-text";
 import { getContentString } from "../utils";
+
+/** A live subagent stream as exposed by the v1 SDK's `stream.subagents`. */
+export type SubagentStream = SubagentStreamInterface;
 
 type SubagentVisual = {
   icon: React.ReactNode;
@@ -42,33 +50,79 @@ function visualFor(subagentType: string): SubagentVisual {
   };
 }
 
+/** Latest assistant text emitted by the subagent's scoped stream. */
+function latestAssistantText(messages: Message[] | undefined): string {
+  if (!messages?.length) return "";
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].type === "ai") {
+      const text = getContentString(messages[i].content);
+      if (text.trim()) return text;
+    }
+  }
+  return "";
+}
+
 export interface SubagentCardProps {
   subagentType: string;
   description: string;
+  /**
+   * Live subagent stream (v1 SDK). When present, the card renders the
+   * specialist's status and streaming tokens in real time.
+   */
+  subagent?: SubagentStream;
+  /**
+   * Fallback for runs without a live subagent stream (e.g. replayed history):
+   * the `task` tool-result message carrying the final report.
+   */
   result?: ToolMessage;
 }
 
 /**
- * Renders a deepagents `task` delegation as a card: which subagent was spawned,
- * the task it was given, and (when it returns) its final report. The subagent
- * runs in an isolated context, so only its final message comes back on the main
- * stream — this card makes that delegation visible instead of a raw JSON table.
+ * Renders a deepagents `task` delegation as a card. With a live `subagent`
+ * stream (v1 SDK `stream.subagents`) it shows the specialist's status and
+ * streaming output as it works; without one it falls back to the returned
+ * tool-result message. Either way the delegation is made visible instead of a
+ * raw JSON table.
  */
 export function SubagentCard({
   subagentType,
   description,
+  subagent,
   result,
 }: SubagentCardProps) {
-  const done = !!result;
+  // Status: prefer the live stream; otherwise infer from the fallback result.
+  const status: SubagentStatus =
+    subagent?.status ?? (result ? "complete" : "running");
+  const done = status === "complete";
+  const errored = status === "error";
+  const running = status === "running";
+  const pending = status === "pending";
+
   const [expanded, setExpanded] = useState(!done);
   const visual = visualFor(subagentType);
-  const resultText = result ? getContentString(result.content) : "";
+
+  // Display text: live assistant tokens, then the subagent's final result,
+  // then the fallback tool message.
+  const liveText = latestAssistantText(subagent?.messages);
+  const resultText =
+    liveText ||
+    subagent?.result ||
+    (result ? getContentString(result.content) : "");
+  const toolCallCount = subagent?.toolCalls?.length ?? 0;
+
+  const statusLabel = done
+    ? "Returned findings"
+    : errored
+      ? "Failed"
+      : pending
+        ? "Queued"
+        : "Working…";
 
   return (
     <div
       className={cn(
         "w-full max-w-2xl overflow-hidden rounded-xl border border-l-[3px] bg-card shadow-sm",
-        visual.accent,
+        errored ? "border-l-rose-400 text-rose-600" : visual.accent,
       )}
     >
       <button
@@ -76,13 +130,26 @@ export function SubagentCard({
         className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left hover:bg-muted/40"
       >
         <span className="flex min-w-0 items-center gap-2.5">
-          <span className={cn("shrink-0", visual.accent)}>{visual.icon}</span>
+          <span
+            className={cn(
+              "shrink-0",
+              errored ? "text-rose-600" : visual.accent,
+            )}
+          >
+            {errored ? <TriangleAlert className="size-4" /> : visual.icon}
+          </span>
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-semibold capitalize text-foreground">
               {subagentType.replace(/[-_]/g, " ")}
             </span>
             <span className="truncate text-xs text-muted-foreground">
-              {done ? "Returned findings" : "Working…"}
+              {statusLabel}
+              {toolCallCount > 0 && (
+                <>
+                  {" · "}
+                  {toolCallCount} tool call{toolCallCount === 1 ? "" : "s"}
+                </>
+              )}
             </span>
           </span>
         </span>
@@ -92,6 +159,11 @@ export function SubagentCard({
               <CheckCircle2 className="size-3" />
               Done
             </span>
+          ) : errored ? (
+            <span className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+              <TriangleAlert className="size-3" />
+              Error
+            </span>
           ) : (
             <span
               className={cn(
@@ -100,7 +172,7 @@ export function SubagentCard({
               )}
             >
               <Loader2 className="size-3 animate-spin" />
-              Running
+              {pending ? "Queued" : "Running"}
             </span>
           )}
           <ChevronDown
@@ -128,14 +200,19 @@ export function SubagentCard({
                   {description}
                 </div>
               )}
-              {done ? (
+              {resultText ? (
                 <div className="max-h-80 overflow-y-auto text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300">
                   <MarkdownText>{resultText}</MarkdownText>
+                  {running && (
+                    <span className="ml-0.5 inline-block h-4 w-[2px] translate-y-0.5 animate-pulse bg-blue-500 align-middle" />
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
                   <Loader2 className="size-3.5 animate-spin" />
-                  Searching sources in an isolated context…
+                  {pending
+                    ? "Queued to start…"
+                    : "Searching sources in an isolated context…"}
                 </div>
               )}
             </div>
