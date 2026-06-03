@@ -30,15 +30,8 @@ Serve it locally for the UI (dev-only):     langgraph dev   # in-memory; not pro
 """
 
 import os
-from typing import Any
 
 from deepagents import SubAgent, create_deep_agent
-from langchain_core.callbacks import (
-    AsyncCallbackManagerForLLMRun,
-    CallbackManagerForLLMRun,
-)
-from langchain_core.messages import BaseMessage
-from langchain_core.outputs import ChatResult
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 
@@ -90,61 +83,6 @@ def internet_search(query: str, max_results: int = 5, topic: str = "general") ->
     return "\n".join(lines)
 
 
-class RetryingChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
-    """Gemini chat model that retries transient ``MALFORMED_FUNCTION_CALL`` turns.
-
-    Gemini 2.5 intermittently returns ``finish_reason == "MALFORMED_FUNCTION_CALL"``
-    with an empty message and no tool calls. The agent loop then treats that empty
-    turn as the final answer and halts the whole run. The failure is flaky, not
-    deterministic, so simply re-calling the model a couple of times almost always
-    recovers. (Transient API errors like 5xx/quota are already retried by the base
-    model's own ``max_retries``.)
-    """
-
-    max_malformed_retries: int = 3
-
-    @staticmethod
-    def _is_malformed(result: ChatResult) -> bool:
-        if not result.generations:
-            return False
-        generation = result.generations[0]
-        info = generation.generation_info or {}
-        finish_reason = info.get("finish_reason") or generation.message.response_metadata.get(
-            "finish_reason"
-        )
-        return finish_reason == "MALFORMED_FUNCTION_CALL"
-
-    def _generate(
-        self,
-        messages: list[BaseMessage],
-        stop: list[str] | None = None,
-        run_manager: CallbackManagerForLLMRun | None = None,
-        **kwargs: Any,
-    ) -> ChatResult:
-        result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
-        attempts = 0
-        while self._is_malformed(result) and attempts < self.max_malformed_retries:
-            attempts += 1
-            result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
-        return result
-
-    async def _agenerate(
-        self,
-        messages: list[BaseMessage],
-        stop: list[str] | None = None,
-        run_manager: AsyncCallbackManagerForLLMRun | None = None,
-        **kwargs: Any,
-    ) -> ChatResult:
-        result = await super()._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
-        attempts = 0
-        while self._is_malformed(result) and attempts < self.max_malformed_retries:
-            attempts += 1
-            result = await super()._agenerate(
-                messages, stop=stop, run_manager=run_manager, **kwargs
-            )
-        return result
-
-
 # Gemini through Vertex AI — authenticates with your GCP credentials, so traffic
 # and billing stay inside your Google org.
 #
@@ -153,24 +91,16 @@ class RetryingChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
 # ChatVertexAI uses gRPC whose native layer segfaults inside LangGraph's async
 # server worker on Windows.
 #
-# IMPORTANT: do NOT set temperature=0 here. At temperature 0 Gemini is
-# deterministic, so a MALFORMED_FUNCTION_CALL becomes a PERMANENT halt — every
-# retry re-sends the identical request and gets the identical malformed result.
-# The model's default sampling gives the variation that lets the retry below
-# escape the bad state (and makes malformed flaky rather than fatal).
-#
-# disable_streaming="tool_calling": when tools are bound (every call in this
-# agent), invoke the model non-streaming so it goes through `_generate`/
-# `_agenerate` — the path our RetryingChatGoogleGenerativeAI overrides. LangGraph
-# otherwise streams the model via `_astream`, which would bypass the retry and let
-# a single MALFORMED_FUNCTION_CALL halt the whole run with an empty report.
-# Providers commonly can't stream tool-call tokens reliably anyway, so this is the
-# recommended setting for tool-calling agents. Plan/file/subagent updates still
-# stream to the UI via the values/updates/subgraph stream modes.
-model = RetryingChatGoogleGenerativeAI(
+# KNOWN QUIRK (accepted): gemini-2.5-flash occasionally returns finish_reason
+# MALFORMED_FUNCTION_CALL — an empty turn that ends the run early. Leave
+# temperature at the model DEFAULT (do not set 0): default sampling keeps that
+# failure flaky and recoverable on a re-run, whereas temperature=0 makes it
+# deterministic and permanent. A model-level retry doesn't help because LangGraph
+# drives the model through the streaming path; a robust fix would override
+# `_astream` or move the orchestrator to a sturdier model (e.g. gemini-2.5-pro).
+model = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     vertexai=True,
-    disable_streaming="tool_calling",
     project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
     location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
 )
