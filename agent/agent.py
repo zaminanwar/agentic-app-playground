@@ -30,8 +30,15 @@ Serve it locally for the UI (dev-only):     langgraph dev   # in-memory; not pro
 """
 
 import os
+from typing import Any
 
 from deepagents import SubAgent, create_deep_agent
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForLLMRun,
+    CallbackManagerForLLMRun,
+)
+from langchain_core.messages import BaseMessage
+from langchain_core.outputs import ChatResult
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 
@@ -83,6 +90,61 @@ def internet_search(query: str, max_results: int = 5, topic: str = "general") ->
     return "\n".join(lines)
 
 
+class RetryingChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
+    """Gemini chat model that retries transient ``MALFORMED_FUNCTION_CALL`` turns.
+
+    Gemini 2.5 intermittently returns ``finish_reason == "MALFORMED_FUNCTION_CALL"``
+    with an empty message and no tool calls. The agent loop then treats that empty
+    turn as the final answer and halts the whole run. The failure is flaky, not
+    deterministic, so simply re-calling the model a couple of times almost always
+    recovers. (Transient API errors like 5xx/quota are already retried by the base
+    model's own ``max_retries``.)
+    """
+
+    max_malformed_retries: int = 2
+
+    @staticmethod
+    def _is_malformed(result: ChatResult) -> bool:
+        if not result.generations:
+            return False
+        generation = result.generations[0]
+        info = generation.generation_info or {}
+        finish_reason = info.get("finish_reason") or generation.message.response_metadata.get(
+            "finish_reason"
+        )
+        return finish_reason == "MALFORMED_FUNCTION_CALL"
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        attempts = 0
+        while self._is_malformed(result) and attempts < self.max_malformed_retries:
+            attempts += 1
+            result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        return result
+
+    async def _agenerate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: AsyncCallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        result = await super()._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        attempts = 0
+        while self._is_malformed(result) and attempts < self.max_malformed_retries:
+            attempts += 1
+            result = await super()._agenerate(
+                messages, stop=stop, run_manager=run_manager, **kwargs
+            )
+        return result
+
+
 # Gemini through Vertex AI — authenticates with your GCP credentials, so traffic
 # and billing stay inside your Google org.
 #
@@ -90,9 +152,14 @@ def internet_search(query: str, max_results: int = 5, topic: str = "general") ->
 # langchain-google-vertexai / ChatVertexAI: it talks to Vertex over REST, while
 # ChatVertexAI uses gRPC whose native layer segfaults inside LangGraph's async
 # server worker on Windows.
-model = ChatGoogleGenerativeAI(
+#
+# temperature=0 keeps the research/tool-calling deterministic and factual, and
+# also reduces the rate of Gemini's MALFORMED_FUNCTION_CALL hiccups (which the
+# subclass above recovers from when they still occur).
+model = RetryingChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     vertexai=True,
+    temperature=0,
     project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
     location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
 )
@@ -150,7 +217,10 @@ REPORT_UI_GUIDE = """\
 - Output ONLY openui-lang. No prose, no code fences.
 - One statement per line: `identifier = Expression`. Identifiers are camelCase.
 - Define `root = Stack([...])` FIRST (so the shell renders), then define each part below it.
-- Strings use double quotes; numbers are bare; arrays use [].
+- Every statement and every string stays ENTIRELY ON ONE LINE. Strings use double quotes;
+  for a line break inside text write \\n. NEVER use triple-quoted strings, and never put a real
+  newline inside a string (e.g. write MarkDownRenderer("## Summary\\n\\nText...") on one line).
+- Numbers are bare; arrays use [].
 
 Use ONLY these components (? marks optional args):
 - Stack(children[], direction?, gap?, align?, justify?, wrap?) — flex layout.
