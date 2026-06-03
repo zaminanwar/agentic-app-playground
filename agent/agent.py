@@ -154,12 +154,21 @@ class RetryingChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
 # server worker on Windows.
 #
 # temperature=0 keeps the research/tool-calling deterministic and factual, and
-# also reduces the rate of Gemini's MALFORMED_FUNCTION_CALL hiccups (which the
-# subclass above recovers from when they still occur).
+# also reduces the rate of Gemini's MALFORMED_FUNCTION_CALL hiccups.
+#
+# disable_streaming="tool_calling": when tools are bound (every call in this
+# agent), invoke the model non-streaming so it goes through `_generate`/
+# `_agenerate` — the path our RetryingChatGoogleGenerativeAI overrides. LangGraph
+# otherwise streams the model via `_astream`, which would bypass the retry and let
+# a single MALFORMED_FUNCTION_CALL halt the whole run with an empty report.
+# Providers commonly can't stream tool-call tokens reliably anyway, so this is the
+# recommended setting for tool-calling agents. Plan/file/subagent updates still
+# stream to the UI via the values/updates/subgraph stream modes.
 model = RetryingChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     vertexai=True,
     temperature=0,
+    disable_streaming="tool_calling",
     project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
     location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
 )
