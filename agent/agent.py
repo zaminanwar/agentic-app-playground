@@ -101,7 +101,7 @@ class RetryingChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
     model's own ``max_retries``.)
     """
 
-    max_malformed_retries: int = 2
+    max_malformed_retries: int = 3
 
     @staticmethod
     def _is_malformed(result: ChatResult) -> bool:
@@ -153,8 +153,11 @@ class RetryingChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
 # ChatVertexAI uses gRPC whose native layer segfaults inside LangGraph's async
 # server worker on Windows.
 #
-# temperature=0 keeps the research/tool-calling deterministic and factual, and
-# also reduces the rate of Gemini's MALFORMED_FUNCTION_CALL hiccups.
+# IMPORTANT: do NOT set temperature=0 here. At temperature 0 Gemini is
+# deterministic, so a MALFORMED_FUNCTION_CALL becomes a PERMANENT halt — every
+# retry re-sends the identical request and gets the identical malformed result.
+# The model's default sampling gives the variation that lets the retry below
+# escape the bad state (and makes malformed flaky rather than fatal).
 #
 # disable_streaming="tool_calling": when tools are bound (every call in this
 # agent), invoke the model non-streaming so it goes through `_generate`/
@@ -167,7 +170,6 @@ class RetryingChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
 model = RetryingChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     vertexai=True,
-    temperature=0,
     disable_streaming="tool_calling",
     project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
     location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
