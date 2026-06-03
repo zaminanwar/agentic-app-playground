@@ -187,7 +187,11 @@ export function Thread() {
     stream.submit(
       { messages: [...toolMessages, newHumanMessage] },
       {
-        streamMode: ["values"],
+        // `messages-tuple` streams tokens incrementally; `streamSubgraphs`
+        // surfaces each `task` subagent's nested run so its work renders live
+        // in the subagent cards instead of arriving all at once on completion.
+        streamMode: ["values", "messages-tuple"],
+        streamSubgraphs: true,
         optimisticValues: (prev) => ({
           ...prev,
           messages: [
@@ -210,7 +214,8 @@ export function Thread() {
     setFirstTokenReceived(false);
     stream.submit(undefined, {
       checkpoint: parentCheckpoint,
-      streamMode: ["values"],
+      streamMode: ["values", "messages-tuple"],
+      streamSubgraphs: true,
     });
   };
 
