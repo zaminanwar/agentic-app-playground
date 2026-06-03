@@ -7,11 +7,7 @@
 // assistant-ui expects them attached to the assistant message's matching
 // tool-call part, so we fold them in here.
 
-import type {
-  AIMessage,
-  Message,
-  ToolMessage,
-} from "@langchain/langgraph-sdk";
+import type { AIMessage, Message, ToolMessage } from "@langchain/langgraph-sdk";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import { getContentString } from "../thread/utils";
 

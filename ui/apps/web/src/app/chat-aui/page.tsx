@@ -12,6 +12,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AssistantUIRuntimeProvider } from "@/components/chat-aui/runtime-provider";
 import { ChatAuiThread } from "@/components/chat-aui/thread";
 import { WorkspacePanel } from "@/components/thread/workspace";
+import ThreadHistory from "@/components/thread/history";
 
 export default function ChatAuiPage(): React.ReactNode {
   return (
@@ -21,6 +22,7 @@ export default function ChatAuiPage(): React.ReactNode {
         <StreamProvider>
           <AssistantUIRuntimeProvider>
             <div className="flex h-screen w-full overflow-hidden">
+              <ThreadHistory />
               <div className="min-w-0 flex-1">
                 <ChatAuiThread />
               </div>
