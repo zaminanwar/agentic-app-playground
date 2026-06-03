@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Download, FileText, FileCode2, Star } from "lucide-react";
+import {
+  Download,
+  FileText,
+  FileCode2,
+  Star,
+  Maximize2,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MarkdownText } from "../markdown-text";
 import { TooltipIconButton } from "../tooltip-icon-button";
@@ -55,6 +62,17 @@ function downloadFile(path: string, text: string) {
 export function FilesPanel({ files }: { files: AgentFiles }) {
   const paths = useMemo(() => sortPaths(Object.keys(files ?? {})), [files]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  // Close the full-screen report on Escape.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
 
   // Default to the report (or first file); keep selection valid as files change.
   useEffect(() => {
@@ -124,15 +142,27 @@ export function FilesPanel({ files }: { files: AgentFiles }) {
           <span className="truncate font-mono text-xs text-muted-foreground">
             {activePath}
           </span>
-          <TooltipIconButton
-            tooltip="Download"
-            variant="ghost"
-            className="size-7 shrink-0"
-            onClick={() => downloadFile(activePath, isBinary ? "" : text)}
-            disabled={isBinary}
-          >
-            <Download className="size-4" />
-          </TooltipIconButton>
+          <div className="flex shrink-0 items-center gap-1">
+            {renderOpenUI && (
+              <TooltipIconButton
+                tooltip="Expand"
+                variant="ghost"
+                className="size-7"
+                onClick={() => setExpanded(true)}
+              >
+                <Maximize2 className="size-4" />
+              </TooltipIconButton>
+            )}
+            <TooltipIconButton
+              tooltip="Download"
+              variant="ghost"
+              className="size-7"
+              onClick={() => downloadFile(activePath, isBinary ? "" : text)}
+              disabled={isBinary}
+            >
+              <Download className="size-4" />
+            </TooltipIconButton>
+          </div>
         </div>
         <div className="max-h-[calc(100vh-22rem)] overflow-y-auto px-4 py-3 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300">
           {isBinary ? (
@@ -150,6 +180,36 @@ export function FilesPanel({ files }: { files: AgentFiles }) {
           )}
         </div>
       </div>
+
+      {/* Full-screen report — gives the generative dashboard room to breathe. */}
+      {expanded && renderOpenUI && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:p-8"
+          onClick={() => setExpanded(false)}
+        >
+          <div
+            className="w-full max-w-5xl rounded-xl border bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2">
+              <span className="truncate font-mono text-xs text-muted-foreground">
+                {activePath}
+              </span>
+              <TooltipIconButton
+                tooltip="Close"
+                variant="ghost"
+                className="size-7 shrink-0"
+                onClick={() => setExpanded(false)}
+              >
+                <X className="size-4" />
+              </TooltipIconButton>
+            </div>
+            <div className="max-h-[85vh] overflow-y-auto p-5">
+              <OpenUIReportView source={text} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
