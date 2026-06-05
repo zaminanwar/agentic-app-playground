@@ -31,7 +31,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import { GitHubSVG } from "../icons/github";
-import { WorkspacePanel } from "./workspace";
+import { ArtifactCanvas } from "./workspace/artifact-canvas";
 import {
   Tooltip,
   TooltipContent,
@@ -39,7 +39,8 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 
-const WORKSPACE_WIDTH = 430;
+// Width of the conversation rail when the artifact canvas owns the main column.
+const RAIL_WIDTH = 480;
 
 const EXAMPLE_PROMPTS = [
   "Brief me on the James Webb Space Telescope's biggest discoveries so far.",
@@ -223,7 +224,9 @@ export function Thread() {
   const hasNoAIOrToolMessages = !messages.find(
     (m) => m.type === "ai" || m.type === "tool",
   );
-  const showWorkspace = chatStarted && workspaceOpen && isLargeScreen;
+  // Once a run starts, the report canvas owns the main column and the chat
+  // becomes a side rail (artifact-first). The user can still collapse it.
+  const showCanvas = chatStarted && workspaceOpen && isLargeScreen;
 
   return (
     <div className="flex w-full h-screen overflow-hidden">
@@ -261,7 +264,17 @@ export function Thread() {
             : { duration: 0 }
         }
       >
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        <div
+          className={cn(
+            "flex flex-col min-w-0 overflow-hidden relative",
+            showCanvas
+              ? "flex-1 lg:flex-none lg:border-r lg:border-border"
+              : "flex-1",
+          )}
+          style={
+            showCanvas && isLargeScreen ? { width: RAIL_WIDTH } : undefined
+          }
+        >
           {!chatStarted && (
             <div className="absolute top-0 left-0 w-full flex items-center justify-between gap-3 p-2 pl-4 z-10">
               <div>
@@ -331,15 +344,19 @@ export function Thread() {
                 <div className="flex items-center">
                   <OpenGitHubRepo />
                 </div>
-                {isLargeScreen && !workspaceOpen && (
+                {isLargeScreen && (
                   <TooltipIconButton
                     size="lg"
                     className="p-4"
-                    tooltip="Show research workspace"
+                    tooltip={workspaceOpen ? "Hide report" : "Show report"}
                     variant="ghost"
-                    onClick={() => setWorkspaceOpen(true)}
+                    onClick={() => setWorkspaceOpen((p) => !p)}
                   >
-                    <Sparkles className="size-5 text-blue-500" />
+                    {workspaceOpen ? (
+                      <PanelRightClose className="size-5" />
+                    ) : (
+                      <Sparkles className="size-5 text-blue-500" />
+                    )}
                   </TooltipIconButton>
                 )}
                 <TooltipIconButton
@@ -499,19 +516,17 @@ export function Thread() {
           </StickToBottom>
         </div>
 
-        {/* Research workspace: live plan + report/artifacts, synced from agent state. */}
+        {/* Artifact canvas: the report is the hero, synced from agent state. */}
         <AnimatePresence initial={false}>
-          {showWorkspace && (
+          {showCanvas && (
             <motion.div
-              className="hidden lg:block h-full border-l border-border overflow-hidden"
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: WORKSPACE_WIDTH, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 34 }}
+              className="hidden lg:flex min-w-0 flex-1 h-full overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
             >
-              <div style={{ width: WORKSPACE_WIDTH }} className="h-full">
-                <WorkspacePanel onClose={() => setWorkspaceOpen(false)} />
-              </div>
+              <ArtifactCanvas />
             </motion.div>
           )}
         </AnimatePresence>

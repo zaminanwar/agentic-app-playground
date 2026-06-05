@@ -59,7 +59,14 @@ function downloadFile(path: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-export function FilesPanel({ files }: { files: AgentFiles }) {
+export function FilesPanel({
+  files,
+  fill = false,
+}: {
+  files: AgentFiles;
+  /** Let the active file grow to fill its container (artifact-canvas hero). */
+  fill?: boolean;
+}) {
   const paths = useMemo(() => sortPaths(Object.keys(files ?? {})), [files]);
   const [selected, setSelected] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -101,7 +108,7 @@ export function FilesPanel({ files }: { files: AgentFiles }) {
   const renderMarkdown = isMarkdownPath(activePath) && !isBinary;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={cn("flex flex-col gap-3", fill && "h-full min-h-0")}>
       {/* File switcher */}
       <div className="flex flex-wrap gap-1.5">
         {paths.map((path) => {
@@ -137,7 +144,12 @@ export function FilesPanel({ files }: { files: AgentFiles }) {
       </div>
 
       {/* Active file */}
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div
+        className={cn(
+          "overflow-hidden rounded-xl border border-border bg-card",
+          fill && "flex min-h-0 flex-1 flex-col",
+        )}
+      >
         <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2">
           <span className="truncate font-mono text-xs text-muted-foreground">
             {activePath}
@@ -164,20 +176,27 @@ export function FilesPanel({ files }: { files: AgentFiles }) {
             </TooltipIconButton>
           </div>
         </div>
-        <div className="max-h-[calc(100vh-22rem)] overflow-y-auto px-4 py-3 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300">
-          {isBinary ? (
-            <p className="py-4 text-sm text-muted-foreground">
-              Binary file ({activeFile.encoding}) — preview unavailable.
-            </p>
-          ) : renderOpenUI ? (
-            <OpenUIReportView source={text} />
-          ) : renderMarkdown ? (
-            <MarkdownText>{text}</MarkdownText>
-          ) : (
-            <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
-              {text}
-            </pre>
+        <div
+          className={cn(
+            "overflow-y-auto px-4 py-3 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300",
+            fill ? "min-h-0 flex-1" : "max-h-[calc(100vh-22rem)]",
           )}
+        >
+          <div className={cn(fill && "mx-auto w-full max-w-5xl")}>
+            {isBinary ? (
+              <p className="py-4 text-sm text-muted-foreground">
+                Binary file ({activeFile.encoding}) — preview unavailable.
+              </p>
+            ) : renderOpenUI ? (
+              <OpenUIReportView source={text} />
+            ) : renderMarkdown ? (
+              <MarkdownText>{text}</MarkdownText>
+            ) : (
+              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+                {text}
+              </pre>
+            )}
+          </div>
         </div>
       </div>
 
