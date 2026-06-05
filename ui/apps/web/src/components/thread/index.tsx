@@ -271,7 +271,9 @@ export function Thread() {
               ? "flex-1 lg:flex-none lg:border-r lg:border-border"
               : "flex-1",
           )}
-          style={showCanvas && isLargeScreen ? { width: RAIL_WIDTH } : undefined}
+          style={
+            showCanvas && isLargeScreen ? { width: RAIL_WIDTH } : undefined
+          }
         >
           {!chatStarted && (
             <div className="absolute top-0 left-0 w-full flex items-center justify-between gap-3 p-2 pl-4 z-10">
