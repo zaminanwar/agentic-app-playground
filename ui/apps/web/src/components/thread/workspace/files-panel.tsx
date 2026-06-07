@@ -19,6 +19,12 @@ import {
   isMarkdownPath,
   type AgentFiles,
 } from "@/lib/agent-types";
+import {
+  downloadFile,
+  isOpenUIPath,
+  isReport,
+  sortPaths,
+} from "@/lib/report-files";
 
 // OpenUI report renderer is client-only (its <Renderer> touches `document`),
 // so load it with ssr:false.
@@ -26,38 +32,6 @@ const OpenUIReportView = dynamic(
   () => import("@/components/openui/openui-report-view"),
   { ssr: false },
 );
-
-// The agent writes the report as an interactive openui-lang dashboard
-// (`final_report.ui`, preferred) alongside the markdown source.
-const REPORT_PATHS = ["final_report.ui", "final_report.md"];
-
-function isOpenUIPath(path: string): boolean {
-  return path.endsWith(".ui");
-}
-
-function isReport(path: string): boolean {
-  return REPORT_PATHS.some((r) => path === r || path.endsWith(`/${r}`));
-}
-
-/** Sort: the report first, then the rest alphabetically. */
-function sortPaths(paths: string[]): string[] {
-  return [...paths].sort((a, b) => {
-    if (isReport(a) !== isReport(b)) return isReport(a) ? -1 : 1;
-    return a.localeCompare(b);
-  });
-}
-
-function downloadFile(path: string, text: string) {
-  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileBasename(path);
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
 
 export function FilesPanel({
   files,

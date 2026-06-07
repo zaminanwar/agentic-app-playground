@@ -11,6 +11,10 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import { SyntaxHighlighter } from "@/components/thread/syntax-highlighter";
 
 import { TooltipIconButton } from "@/components/thread/tooltip-icon-button";
+import {
+  InlineCitation,
+  citationIndex,
+} from "@/components/ai-elements/inline-citation";
 import { cn } from "@/lib/utils";
 
 import "katex/dist/katex.min.css";
@@ -115,15 +119,34 @@ const defaultComponents: any = {
       {...props}
     />
   ),
-  a: ({ className, ...props }: { className?: string }) => (
-    <a
-      className={cn(
-        "text-primary font-medium underline underline-offset-4",
-        className,
-      )}
-      {...props}
-    />
-  ),
+  a: ({
+    className,
+    children,
+    href,
+    ...props
+  }: {
+    className?: string;
+    children?: React.ReactNode;
+    href?: string;
+  }) => {
+    // A numbered link (`[1](url)`) is an inline citation → render a pill.
+    const idx = citationIndex(children);
+    if (idx && href) {
+      return <InlineCitation index={idx} href={href} />;
+    }
+    return (
+      <a
+        href={href}
+        className={cn(
+          "text-primary font-medium underline underline-offset-4",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </a>
+    );
+  },
   blockquote: ({ className, ...props }: { className?: string }) => (
     <blockquote
       className={cn("border-l-2 pl-6 italic", className)}

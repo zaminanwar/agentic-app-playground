@@ -9,7 +9,15 @@ import {
 } from "lucide-react";
 import { classifyToolCall, fileBasename } from "@/lib/agent-types";
 import { useStreamContext } from "@/providers/Stream";
-import { ToolCalls } from "./tool-calls";
+import { getContentString } from "../utils";
+import {
+  Tool,
+  ToolHeader,
+  ToolContent,
+  ToolSection,
+  ToolJson,
+  type ToolState,
+} from "@/components/ai-elements/tool";
 import { SubagentCard } from "./subagent-card";
 
 type ToolCall = NonNullable<AIMessage["tool_calls"]>[number];
@@ -151,7 +159,25 @@ export function ToolCallViews({
         );
       })}
       <HousekeepingChips toolCalls={housekeeping} />
-      {other.length > 0 && <ToolCalls toolCalls={other} />}
+      {other.map((tc, i) => {
+        const result = tc.id ? resultsById.get(tc.id) : undefined;
+        const state: ToolState = result ? "complete" : "running";
+        return (
+          <Tool key={tc.id ?? `other-${i}`}>
+            <ToolHeader title={tc.name} state={state} />
+            <ToolContent>
+              <ToolSection label="Parameters">
+                <ToolJson value={tc.args ?? {}} />
+              </ToolSection>
+              {result && (
+                <ToolSection label="Result">
+                  <ToolJson value={getContentString(result.content)} />
+                </ToolSection>
+              )}
+            </ToolContent>
+          </Tool>
+        );
+      })}
     </div>
   );
 }
