@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
@@ -100,6 +100,13 @@ export function SubagentCard({
 
   const [expanded, setExpanded] = useState(!done);
   const visual = visualFor(subagentType);
+
+  // Reasoning-style: a subagent tidies itself away once it finishes, keeping the
+  // rail focused on what's still working. Manual re-expands aren't fought (the
+  // effect only fires on the running -> complete transition).
+  useEffect(() => {
+    if (done) setExpanded(false);
+  }, [done]);
 
   // Display text: live assistant tokens, then the subagent's final result,
   // then the fallback tool message.

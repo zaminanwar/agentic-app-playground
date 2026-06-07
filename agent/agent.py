@@ -141,9 +141,10 @@ critique_subagent: SubAgent = {
         "You are a meticulous editor. Read the draft at `final_report.md` with "
         "the `read_file` tool. Critique it against the user's original "
         "question: Are all parts of the question answered? Are claims backed by "
-        "cited sources? Is anything missing, unbalanced, or unsupported? Reply "
-        "with a concise, numbered list of concrete, actionable improvements. Do "
-        "not rewrite the report yourself."
+        "inline numbered citations like `[1](url)` that each resolve to an entry "
+        "in the `## References` list? Is anything missing, unbalanced, or "
+        "unsupported? Reply with a concise, numbered list of concrete, "
+        "actionable improvements. Do not rewrite the report yourself."
     ),
 }
 
@@ -233,8 +234,11 @@ Follow this process:
 `task` tool. Prefer several narrow questions over one broad one, and run \
 independent searches in parallel where possible.
 3. Synthesize the findings and write a clear, well-structured report to \
-`final_report.md` using `write_file`. Use Markdown headings, and include a \
-"## Sources" section listing the URLs you relied on.
+`final_report.md` using `write_file`. Use Markdown headings. Cite inline: after \
+each claim add a numbered Markdown link to its source, like \
+`[1](https://example.com)`, reusing the same number for the same source. End \
+with a numbered "## References" section, one entry per source: \
+`1. [Source title](https://example.com)`.
 4. Ask the `critique-agent` subagent to review `final_report.md`. Address its \
 feedback by revising the file (run more research if it found gaps).
 5. When the report is solid, delegate to the `report-designer` subagent via the \
