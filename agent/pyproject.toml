@@ -61,7 +61,7 @@ tracing = [
 # 'dev' group below for tools (uv) that consume PEP 735 groups; the extra exists
 # so plain `pip install .[dev]` also works in CI.
 dev = [
-    "ruff>=0.6,<1.0",
+    "ruff>=0.15.16,<1.0",
     "mypy>=1.11,<2.0",
     "pytest>=8.0,<9.0",
 ]
@@ -69,7 +69,7 @@ dev = [
 # PEP 735 dependency group (native to `uv sync --group dev`).
 [dependency-groups]
 dev = [
-    "ruff>=0.6,<1.0",
+    "ruff>=0.15.16,<1.0",
     "mypy>=1.11,<2.0",
     "pytest>=8.0,<9.0",
 ]
