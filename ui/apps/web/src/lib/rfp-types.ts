@@ -5,10 +5,10 @@
  * that the UI reads via `stream.values.files` (path -> FileData). This module
  * parses those artifacts into typed shapes the workspace renders:
  *
- *   - `compliance_matrix.json`            -> { rows: MatrixRow[] }   (the hero)
- *   - `outline.json`                      -> { sections: OutlineSection[] }
- *   - `source/rfp_pages.json`             -> { [page]: text }
- *   - `source/requirement_candidates.json`-> RequirementCandidate[]  (recall floor)
+ *   - `compliance_matrix.json`        -> { rows: MatrixRow[] }   (the hero)
+ *   - `outline.json`                  -> { sections: OutlineSection[] }
+ *   - `rfp_pages.json`                -> { [page]: text }
+ *   - `requirement_candidates.json`   -> RequirementCandidate[]  (recall floor)
  *
  * Parsing is defensive: the agent streams these files in progressively and they
  * may be absent or mid-write, so every parser returns null/empty rather than
@@ -17,10 +17,13 @@
 
 import type { AgentFiles, FileData } from "./agent-types";
 
-export const MATRIX_PATH = "compliance_matrix.json";
-export const OUTLINE_PATH = "outline.json";
-export const PAGES_PATH = "source/rfp_pages.json";
-export const CANDIDATES_PATH = "source/requirement_candidates.json";
+// Absolute (leading-slash) keys: deepagents' built-in write_file normalizes
+// every path through validate_path(), which prepends "/", so the `files` state
+// channel keys all start with a slash. Match that exactly or lookups miss.
+export const MATRIX_PATH = "/compliance_matrix.json";
+export const OUTLINE_PATH = "/outline.json";
+export const PAGES_PATH = "/rfp_pages.json";
+export const CANDIDATES_PATH = "/requirement_candidates.json";
 
 export type ComplianceStatus =
   | "unreviewed"

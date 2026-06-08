@@ -11,8 +11,8 @@ and subagent delegation (`task`).
 The pipeline (Phase 1 — "the shred"; capability-based compliance is Phase 2):
   1. `ingest_rfp` downloads the PDF from GCS, extracts per-page text, and writes
      two artifacts to the virtual filesystem:
-       - `source/rfp_pages.json`            {page_number: text}
-       - `source/requirement_candidates.json`  deterministic modal-verb hits
+       - `rfp_pages.json`            {page_number: text}
+       - `requirement_candidates.json`  deterministic modal-verb hits
          (a recall floor so no "shall"/"must" sentence is silently dropped).
   2. `structure-agent`    → `outline.json`           (section hierarchy)
   3. `requirements-agent` → `requirements.json`      (traceable requirements)
@@ -122,8 +122,8 @@ def ingest_rfp(gcs_uri: str) -> str:
         gcs_uri: Either a full ``gs://bucket/object.pdf`` URI or a bare object
             path stored in the RFP_BUCKET (what the web upload route returns).
 
-    Writes two files to the virtual filesystem — ``source/rfp_pages.json``
-    (per-page text) and ``source/requirement_candidates.json`` (deterministic
+    Writes two files to the virtual filesystem — ``rfp_pages.json``
+    (per-page text) and ``requirement_candidates.json`` (deterministic
     modal-verb hits, the recall floor) — and returns a short summary. If
     RFP_BUCKET / credentials are missing, or download/parse fails, it returns an
     explanatory message instead of raising, so the run degrades gracefully.
@@ -166,24 +166,40 @@ def ingest_rfp(gcs_uri: str) -> str:
 
     # Write through StateBackend exactly like the built-in write_file tool does:
     # the `files` channel is a DeltaChannel, so updates must go through the
-    # backend (CONFIG_KEY_SEND) rather than a hand-rolled Command. upload_files
-    # overwrites existing paths, making re-ingestion idempotent.
+    # backend (CONFIG_KEY_SEND) rather than a hand-rolled Command.
+    #
+    # CRITICAL: use ABSOLUTE, leading-slash paths. The built-in read_file/
+    # write_file tools normalize every path through validate_path(), which
+    # prepends "/" — so a subagent's `read_file("rfp_pages.json")` looks up the
+    # key "/rfp_pages.json". upload_files does NOT normalize, so we must store the
+    # leading slash ourselves or the files are written under a key nothing reads.
+    # Root (not a source/ subdir) also keeps them in the non-recursive `ls /`.
     backend = StateBackend()
     backend.upload_files(
         [
-            ("source/rfp_pages.json", json.dumps(pages, ensure_ascii=False).encode("utf-8")),
+            ("/rfp_pages.json", json.dumps(pages, ensure_ascii=False).encode("utf-8")),
             (
-                "source/requirement_candidates.json",
+                "/requirement_candidates.json",
                 json.dumps(candidates, ensure_ascii=False).encode("utf-8"),
             ),
         ]
     )
 
+    # Verify the write landed (read-your-writes within this superstep) so we
+    # never report a false success the orchestrator then can't act on.
+    written = {entry["path"] for entry in (backend.ls("/").entries or [])}
+    missing = {"/rfp_pages.json", "/requirement_candidates.json"} - written
+    if missing:
+        return (
+            f"Downloaded gs://{bucket}/{obj} and parsed {len(pages)} pages, but failed to "
+            f"persist {sorted(missing)} to the filesystem. Do not proceed; retry ingestion."
+        )
+
     nonempty = sum(1 for t in pages.values() if t.strip())
     return (
         f"Ingested gs://{bucket}/{obj}: {len(pages)} pages ({nonempty} with text). "
         f"Found {len(candidates)} candidate requirement sentences. "
-        "Wrote source/rfp_pages.json and source/requirement_candidates.json. "
+        "Wrote rfp_pages.json and requirement_candidates.json (filesystem root). "
         "Next: build the outline, then extract requirements covering every candidate."
     )
 
@@ -220,12 +236,12 @@ model = ChatGoogleGenerativeAI(
 structure_subagent: SubAgent = {
     "name": "structure-agent",
     "description": (
-        "Builds the section hierarchy of the RFP. Reads source/rfp_pages.json and "
+        "Builds the section hierarchy of the RFP. Reads rfp_pages.json and "
         "writes outline.json. Run this FIRST, after ingestion, so requirement "
         "extraction can be scoped section-by-section."
     ),
     "system_prompt": (
-        "You map the structure of a customer RFP. Read `source/rfp_pages.json` "
+        "You map the structure of a customer RFP. Read `rfp_pages.json` "
         "(a JSON object of {page_number: text}) with `read_file`. Identify the "
         "document hierarchy: numbered sections and subsections, their titles, and "
         "nesting. Classify each node as a `header` (title only) or a `section` "
@@ -243,13 +259,13 @@ requirements_subagent: SubAgent = {
     "name": "requirements-agent",
     "description": (
         "Extracts discrete, traceable requirements from the RFP. Reads "
-        "source/rfp_pages.json, source/requirement_candidates.json, and "
+        "rfp_pages.json, requirement_candidates.json, and "
         "outline.json; writes requirements.json. Run AFTER structure-agent."
     ),
     "system_prompt": (
         "You extract requirements from a customer RFP with strict traceability. "
-        "Read `source/requirement_candidates.json` (deterministic modal-verb hits "
-        "with page numbers — your RECALL FLOOR), `source/rfp_pages.json` (full "
+        "Read `requirement_candidates.json` (deterministic modal-verb hits "
+        "with page numbers — your RECALL FLOOR), `rfp_pages.json` (full "
         "text), and `outline.json` (the section hierarchy) with `read_file`.\n\n"
         "Produce one requirement per distinct obligation. EVERY candidate "
         "sentence must be represented by a requirement (or explicitly folded into "
@@ -301,7 +317,7 @@ critique_subagent: SubAgent = {
     ),
     "system_prompt": (
         "You are a meticulous compliance reviewer. Using `read_file`, compare "
-        "`source/requirement_candidates.json` (the recall floor) against "
+        "`requirement_candidates.json` (the recall floor) against "
         "`compliance_matrix.json`. Check: (1) RECALL — is every candidate "
         "sentence reflected by at least one matrix row? List any that appear "
         "dropped. (2) TRACEABILITY — does every row have a non-empty `verbatim`, "
@@ -317,11 +333,16 @@ ORCHESTRATOR_PROMPT = """You orchestrate the analysis of a customer RFP into a \
 structured, traceable compliance matrix. The user gives you a pointer to an \
 uploaded RFP PDF (a gs:// URI or an object path).
 
+All files live at the filesystem ROOT. Read them by their EXACT path (e.g. \
+`read_file("rfp_pages.json")`) — do not rely on `ls` to discover them, and \
+never conclude a file is missing without trying to read it by name.
+
 Follow this process:
 1. Use `write_todos` to lay out the steps below so the user can watch progress.
-2. Call `ingest_rfp` with the user's PDF pointer. This stages \
-`source/rfp_pages.json` and `source/requirement_candidates.json`. If ingestion \
-reports it is unavailable, relay that plainly and stop — do not invent content.
+2. Call `ingest_rfp` with the user's PDF pointer. It stages `rfp_pages.json` and \
+`requirement_candidates.json` and returns a summary. If it reports ingestion is \
+unavailable or that the write failed, relay that plainly and stop — do not \
+invent content and do not proceed.
 3. Delegate to the `structure-agent` subagent (via `task`) to write \
 `outline.json`.
 4. Delegate to the `requirements-agent` subagent to write `requirements.json`, \
@@ -330,10 +351,13 @@ covering every candidate sentence with exact `verbatim` source text.
 `compliance_matrix.json`.
 6. Delegate to the `critique-agent` subagent to check recall and traceability. \
 If it finds gaps, re-run the relevant subagent to fix them, then re-check.
-7. Reply to the user with a short summary: pages ingested, requirements \
-extracted, the domain distribution, and any caveats. The full editable matrix \
-lives in `compliance_matrix.json` for the UI — do NOT paste the whole matrix \
-into your reply.
+7. Before replying, VERIFY the deliverable exists: `read_file("compliance_matrix.json")` \
+and confirm it parses with a non-empty `rows` array. If it is missing or empty, \
+re-run the `domain-agent` (and any prerequisite that did not complete) until it \
+exists — do NOT report success without it.
+8. Reply with a short summary: pages ingested, requirements extracted, the \
+domain distribution, and any caveats. The full editable matrix lives in \
+`compliance_matrix.json` for the UI — do NOT paste the whole matrix into your reply.
 
 Be rigorous about traceability: every requirement must carry its exact source \
 text, page, and section. Never fabricate requirements or pad the matrix."""
