@@ -48,7 +48,7 @@ jobs:
       # Two passes: SARIF (always uploaded, never fails) for the Security tab, then a
       # table pass that enforces the HIGH/CRITICAL gate.
       - name: Trivy filesystem scan (SARIF)
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: ${{ matrix.target.path }}
@@ -65,7 +65,7 @@ jobs:
           category: trivy-fs-${{ matrix.target.name }}
 
       - name: Trivy filesystem scan (gate on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: ${{ matrix.target.path }}
@@ -129,7 +129,7 @@ jobs:
 
       - name: Trivy image scan (SARIF)
         if: steps.check.outputs.exists == 'true'
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: ${{ matrix.target.service }}:scan
@@ -147,7 +147,7 @@ jobs:
 
       - name: Trivy image scan (gate on HIGH/CRITICAL)
         if: steps.check.outputs.exists == 'true'
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: ${{ matrix.target.service }}:scan
