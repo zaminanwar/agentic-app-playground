@@ -54,7 +54,7 @@ inmem = [
 # Lower bound bumped to satisfy deepagents (langsmith>=0.8.3); the modern
 # langchain/langgraph 1.x stack ships langsmith on the 0.8.x line.
 tracing = [
-    "langsmith>=0.8.3,<0.9",
+    "langsmith>=0.8.11,<0.9",
 ]
 
 # Tooling for lint / format / type-check / test. Mirrors the [dependency-groups]
