@@ -1,15 +1,21 @@
-"""Hermetic smoke tests for the deep research agent.
+"""Hermetic smoke tests for the RFP compliance agent.
 
-The real agent talks to Gemini through Vertex AI, which needs GCP credentials
-and network access. To keep these tests fast and runnable in CI with NO creds
-and NO network, we replace ``ChatGoogleGenerativeAI`` with a fake chat model
-BEFORE ``agent.py`` is imported (the model is constructed at module import time).
+The real agent talks to Gemini through Vertex AI (and GCS for ingestion), which
+needs GCP credentials and network access. To keep these tests fast and runnable
+in CI with NO creds and NO network, we replace ``ChatGoogleGenerativeAI`` with a
+fake chat model BEFORE ``agent.py`` is imported (the model is constructed at
+module import time).
 
 We use LangChain's ``GenericFakeChatModel`` so the fake behaves like a real chat
 model under ``create_deep_agent`` (binds tools, returns AIMessages) without
 calling any backend. The fake answers directly (emits no tool calls), so the
-agent loop terminates immediately without touching Vertex AI, Tavily, or the
+agent loop terminates immediately without touching Vertex AI, GCS, or the
 network.
+
+The live ingestion path (``ingest_rfp`` writing to the virtual filesystem via
+StateBackend) needs a real graph execution context + GCS and is verified in the
+live smoke run / dev deploy, not here. These tests cover the agent wiring, the
+deterministic recall helper, GCS-URI parsing, and graceful degradation.
 """
 
 from __future__ import annotations
@@ -24,7 +30,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import Runnable
 
-FAKE_REPLY = "Here is your research briefing. See final_report.md for details."
+FAKE_REPLY = "Shred complete. See compliance_matrix.json for the matrix."
 
 
 @pytest.fixture
@@ -81,7 +87,7 @@ def test_agent_invoke_returns_message(agent_module: object) -> None:
     agent = agent_module.agent  # type: ignore[attr-defined]
 
     result = agent.invoke(
-        {"messages": [{"role": "user", "content": "Research the James Webb telescope."}]}
+        {"messages": [{"role": "user", "content": "Analyze the RFP at sample.pdf."}]}
     )
 
     assert "messages" in result
@@ -93,31 +99,71 @@ def test_agent_invoke_returns_message(agent_module: object) -> None:
 
 
 def test_subagents_are_configured(agent_module: object) -> None:
-    """The deep agent declares the research and critique subagents."""
+    """The deep agent declares the four shred subagents."""
     subagents = (
-        agent_module.research_subagent,  # type: ignore[attr-defined]
+        agent_module.structure_subagent,  # type: ignore[attr-defined]
+        agent_module.requirements_subagent,  # type: ignore[attr-defined]
+        agent_module.domain_subagent,  # type: ignore[attr-defined]
         agent_module.critique_subagent,  # type: ignore[attr-defined]
     )
     names = {sub["name"] for sub in subagents}
-    assert names == {"research-agent", "critique-agent"}
+    assert names == {
+        "structure-agent",
+        "requirements-agent",
+        "domain-agent",
+        "critique-agent",
+    }
 
 
-def test_internet_search_degrades_without_api_key(
+def test_find_requirement_candidates_catches_modal_verbs(agent_module: object) -> None:
+    """The deterministic recall floor catches shall/must obligations."""
+    find = agent_module.find_requirement_candidates  # type: ignore[attr-defined]
+    text = (
+        "Introduction to the program. "
+        "The contractor shall provide 24x7 monitoring. "
+        "Offerors must hold a Top Secret clearance. "
+        "This sentence is purely informational and carries no obligation."
+    )
+    cands = find(text)
+    sentences = [c["sentence"] for c in cands]
+    verbs = {c["modal_verb"] for c in cands}
+
+    assert len(cands) == 2
+    assert verbs == {"shall", "must"}
+    assert any("24x7 monitoring" in s for s in sentences)
+    assert all("purely informational" not in s for s in sentences)
+
+
+def test_find_requirement_candidates_empty_text(agent_module: object) -> None:
+    """No obligations -> no candidates (and no crash on empty input)."""
+    find = agent_module.find_requirement_candidates  # type: ignore[attr-defined]
+    assert find("") == []
+    assert find("Just some background prose with no obligations.") == []
+
+
+def test_parse_gcs_uri(agent_module: object) -> None:
+    """Full gs:// URIs and bare object paths both resolve correctly."""
+    parse = agent_module._parse_gcs_uri  # type: ignore[attr-defined]
+    assert parse("gs://my-bucket/rfp/file.pdf", "fallback") == ("my-bucket", "rfp/file.pdf")
+    assert parse("rfp/file.pdf", "fallback") == ("fallback", "rfp/file.pdf")
+    assert parse("/leading-slash.pdf", "fallback") == ("fallback", "leading-slash.pdf")
+
+
+def test_ingest_rfp_degrades_without_bucket(
     agent_module: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Without TAVILY_API_KEY the search tool returns a clear message, not an error."""
-    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    """A bare object path with no RFP_BUCKET returns a clear message, not an error."""
+    monkeypatch.delenv("RFP_BUCKET", raising=False)
+    ingest = agent_module.ingest_rfp  # type: ignore[attr-defined]
 
-    out = agent_module.internet_search("anything")  # type: ignore[attr-defined]
+    out = ingest("file.pdf")
     assert isinstance(out, str)
-    assert "TAVILY_API_KEY" in out
+    assert "RFP_BUCKET" in out
 
 
-def test_internet_search_degrades_on_whitespace_placeholder(
-    agent_module: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A blank/whitespace placeholder key (Terraform's seed) reads as unconfigured."""
-    monkeypatch.setenv("TAVILY_API_KEY", " ")
-
-    out = agent_module.internet_search("anything")  # type: ignore[attr-defined]
-    assert "TAVILY_API_KEY" in out
+def test_ingest_rfp_handles_missing_pointer(agent_module: object) -> None:
+    """An empty pointer is reported rather than raising."""
+    ingest = agent_module.ingest_rfp  # type: ignore[attr-defined]
+    out = ingest("")
+    assert isinstance(out, str)
+    assert "gs://" in out or "object path" in out

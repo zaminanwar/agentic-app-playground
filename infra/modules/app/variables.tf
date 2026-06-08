@@ -404,6 +404,24 @@ variable "web_plain_env" {
 }
 
 # ---------------------------------------------------------------------------
+# RFP document storage (GCS)
+# ---------------------------------------------------------------------------
+# The web service uploads RFP PDFs to this bucket and the agent reads them. The
+# bucket name is surfaced to both services as the RFP_BUCKET env var.
+
+variable "create_rfp_bucket" {
+  description = "If true, create a GCS bucket for uploaded RFP PDFs and wire RFP_BUCKET into both services. Set false to bring your own bucket."
+  type        = bool
+  default     = true
+}
+
+variable "rfp_bucket_name" {
+  description = "Suffix for the RFP-documents bucket. Full name is <project_id>-<suffix> (GCS bucket names are global)."
+  type        = string
+  default     = "rfp-docs"
+}
+
+# ---------------------------------------------------------------------------
 # Service enablement
 # ---------------------------------------------------------------------------
 

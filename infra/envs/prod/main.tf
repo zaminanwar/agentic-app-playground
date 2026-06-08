@@ -89,6 +89,11 @@ module "app" {
   # --- Optional LangSmith tracing (secret value populated out-of-band) ---
   langsmith_tracing = var.langsmith_tracing
 
+  # --- RFP document storage: module creates <project_id>-rfp-docs and wires
+  #     RFP_BUCKET into both services. ---
+  create_rfp_bucket = true
+  rfp_bucket_name   = "rfp-docs"
+
   # --- Web runtime config: AGENT_URL is wired automatically by the module. ---
   web_assistant_id = "agent"
 
