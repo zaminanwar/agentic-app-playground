@@ -12,7 +12,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "RFP Compliance Workspace",
-  description: "Shred customer RFPs into a traceable, editable compliance matrix.",
+  description:
+    "Shred customer RFPs into a traceable, editable compliance matrix.",
 };
 
 export default function RootLayout({

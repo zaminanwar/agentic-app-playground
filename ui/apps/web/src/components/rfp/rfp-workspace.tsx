@@ -50,7 +50,11 @@ export function RfpWorkspace(): React.ReactNode {
     return rows.filter((r) => {
       if (sectionFilter && r.section_id !== sectionFilter) return false;
       if (domainFilter !== "all" && r.domain !== domainFilter) return false;
-      if (q && !`${r.verbatim} ${r.summary ?? ""} ${r.id}`.toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        !`${r.verbatim} ${r.summary ?? ""} ${r.id}`.toLowerCase().includes(q)
+      )
+        return false;
       return true;
     });
   }, [rows, sectionFilter, domainFilter, search]);
@@ -62,7 +66,8 @@ export function RfpWorkspace(): React.ReactNode {
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const r of rows ?? []) counts[r.compliance_status] = (counts[r.compliance_status] ?? 0) + 1;
+    for (const r of rows ?? [])
+      counts[r.compliance_status] = (counts[r.compliance_status] ?? 0) + 1;
     return counts;
   }, [rows]);
 
@@ -77,7 +82,8 @@ export function RfpWorkspace(): React.ReactNode {
             {hasStarted ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
                 <LoaderCircle className="size-6 animate-spin text-blue-500" />
-                Analyzing the RFP — extracting structure, requirements, and domains…
+                Analyzing the RFP — extracting structure, requirements, and
+                domains…
               </div>
             ) : (
               <UploadPanel />
@@ -101,10 +107,22 @@ export function RfpWorkspace(): React.ReactNode {
         onNew={() => setThreadId(null)}
         right={
           <>
-            <ToggleButton active={sourceOpen} onClick={() => setSourceOpen((p) => !p)} label="Source">
-              {sourceOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+            <ToggleButton
+              active={sourceOpen}
+              onClick={() => setSourceOpen((p) => !p)}
+              label="Source"
+            >
+              {sourceOpen ? (
+                <PanelRightClose className="size-4" />
+              ) : (
+                <PanelRightOpen className="size-4" />
+              )}
             </ToggleButton>
-            <ToggleButton active={chatOpen} onClick={() => setChatOpen((p) => !p)} label="Assistant">
+            <ToggleButton
+              active={chatOpen}
+              onClick={() => setChatOpen((p) => !p)}
+              label="Assistant"
+            >
               <MessageSquare className="size-4" />
             </ToggleButton>
           </>
@@ -121,7 +139,10 @@ export function RfpWorkspace(): React.ReactNode {
             return (
               <span
                 key={status}
-                className={cn("rounded-full border px-2 py-0.5 text-xs", meta?.badge)}
+                className={cn(
+                  "rounded-full border px-2 py-0.5 text-xs",
+                  meta?.badge,
+                )}
               >
                 {meta?.label ?? status}: {count}
               </span>
@@ -204,7 +225,9 @@ function TopBar({
     <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
       <div className="flex items-center gap-2">
         <FileText className="size-5 text-blue-600" />
-        <span className="text-lg font-semibold tracking-tight">RFP Compliance</span>
+        <span className="text-lg font-semibold tracking-tight">
+          RFP Compliance
+        </span>
       </div>
       <div className="flex items-center gap-2">
         {saving && (
@@ -245,7 +268,9 @@ function ToggleButton({
       title={label}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm transition-colors",
-        active ? "border-blue-300 bg-blue-50 text-blue-700" : "border-border hover:bg-muted",
+        active
+          ? "border-blue-300 bg-blue-50 text-blue-700"
+          : "border-border hover:bg-muted",
       )}
     >
       {children}

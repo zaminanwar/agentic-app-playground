@@ -8,7 +8,11 @@ import { Toaster } from "@/components/ui/sonner";
 
 export default function Page(): React.ReactNode {
   return (
-    <React.Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+    <React.Suspense
+      fallback={
+        <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+      }
+    >
       <Toaster />
       <ThreadProvider>
         <StreamProvider>

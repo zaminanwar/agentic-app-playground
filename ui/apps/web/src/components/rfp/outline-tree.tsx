@@ -39,7 +39,9 @@ export function OutlineTree({
           onClick={() => onSelect(null)}
           className={cn(
             "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-            activeSectionId === null ? "bg-blue-50 text-blue-700" : "hover:bg-muted",
+            activeSectionId === null
+              ? "bg-blue-50 text-blue-700"
+              : "hover:bg-muted",
           )}
         >
           <span className="font-medium">All requirements</span>
@@ -73,7 +75,9 @@ export function OutlineTree({
                     {s.section_id}
                   </span>
                 )}
-                <span className={cn(s.kind === "header" && "font-medium")}>{s.title}</span>
+                <span className={cn(s.kind === "header" && "font-medium")}>
+                  {s.title}
+                </span>
               </span>
               {count > 0 && (
                 <span className="shrink-0 rounded-full bg-muted px-1.5 text-xs text-muted-foreground">

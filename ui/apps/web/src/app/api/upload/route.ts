@@ -67,7 +67,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       { status: 400 },
     );
   }
-  if (file.type && file.type !== "application/pdf" && !file.name.endsWith(".pdf")) {
+  if (
+    file.type &&
+    file.type !== "application/pdf" &&
+    !file.name.endsWith(".pdf")
+  ) {
     return NextResponse.json(
       { error: "Only PDF uploads are supported in Phase 1." },
       { status: 415 },
@@ -75,7 +79,9 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
-      { error: `File too large (max ${Math.round(MAX_BYTES / 1024 / 1024)} MB).` },
+      {
+        error: `File too large (max ${Math.round(MAX_BYTES / 1024 / 1024)} MB).`,
+      },
       { status: 413 },
     );
   }
@@ -94,7 +100,10 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
   if (!token) {
     return NextResponse.json(
-      { error: "Empty GCS access token; check the web service account credentials." },
+      {
+        error:
+          "Empty GCS access token; check the web service account credentials.",
+      },
       { status: 502 },
     );
   }
@@ -118,7 +127,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
   } catch (err) {
     return NextResponse.json(
-      { error: "Failed to reach Google Cloud Storage.", detail: (err as Error).message },
+      {
+        error: "Failed to reach Google Cloud Storage.",
+        detail: (err as Error).message,
+      },
       { status: 502 },
     );
   }

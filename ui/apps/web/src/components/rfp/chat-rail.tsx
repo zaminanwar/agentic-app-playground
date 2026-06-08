@@ -5,7 +5,10 @@ import { v4 as uuidv4 } from "uuid";
 import { LoaderCircle } from "lucide-react";
 import type { Checkpoint, Message } from "@langchain/langgraph-sdk";
 import { useStreamContext } from "@/providers/Stream";
-import { AssistantMessage, AssistantMessageLoading } from "@/components/thread/messages/ai";
+import {
+  AssistantMessage,
+  AssistantMessageLoading,
+} from "@/components/thread/messages/ai";
 import { HumanMessage } from "@/components/thread/messages/human";
 import {
   DO_NOT_RENDER_ID_PREFIX,
@@ -41,7 +44,9 @@ export function ChatRail(): React.ReactNode {
     setInput("");
   };
 
-  const handleRegenerate = (parentCheckpoint: Checkpoint | null | undefined) => {
+  const handleRegenerate = (
+    parentCheckpoint: Checkpoint | null | undefined,
+  ) => {
     stream.submit(undefined, {
       checkpoint: parentCheckpoint,
       streamMode: ["values", "messages-tuple"],
@@ -81,7 +86,11 @@ export function ChatRail(): React.ReactNode {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.nativeEvent.isComposing
+              ) {
                 e.preventDefault();
                 (e.target as HTMLElement).closest("form")?.requestSubmit();
               }

@@ -90,9 +90,14 @@ export function parseMatrix(files: AgentFiles | undefined): MatrixRow[] | null {
   if (!raw || !Array.isArray(raw.rows)) return null;
 
   return raw.rows
-    .filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null)
+    .filter(
+      (r): r is Record<string, unknown> => typeof r === "object" && r !== null,
+    )
     .map((r, i) => ({
-      id: typeof r.id === "string" && r.id ? r.id : `REQ-${String(i + 1).padStart(3, "0")}`,
+      id:
+        typeof r.id === "string" && r.id
+          ? r.id
+          : `REQ-${String(i + 1).padStart(3, "0")}`,
       section_id: typeof r.section_id === "string" ? r.section_id : "",
       page: typeof r.page === "number" ? r.page : null,
       verbatim: typeof r.verbatim === "string" ? r.verbatim : "",
@@ -109,7 +114,9 @@ export function parseOutline(files: AgentFiles | undefined): OutlineSection[] {
   const raw = readJson<{ sections?: unknown[] }>(files, OUTLINE_PATH);
   if (!raw || !Array.isArray(raw.sections)) return [];
   return raw.sections
-    .filter((s): s is Record<string, unknown> => typeof s === "object" && s !== null)
+    .filter(
+      (s): s is Record<string, unknown> => typeof s === "object" && s !== null,
+    )
     .map(
       (s): OutlineSection => ({
         section_id: typeof s.section_id === "string" ? s.section_id : "",
@@ -123,7 +130,9 @@ export function parseOutline(files: AgentFiles | undefined): OutlineSection[] {
     .filter((s) => s.section_id || s.title);
 }
 
-export function parsePages(files: AgentFiles | undefined): Record<string, string> {
+export function parsePages(
+  files: AgentFiles | undefined,
+): Record<string, string> {
   return readJson<Record<string, string>>(files, PAGES_PATH) ?? {};
 }
 

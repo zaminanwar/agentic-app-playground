@@ -52,7 +52,10 @@ function findHighlight(
   };
 }
 
-export function SourceViewer({ row, pages }: SourceViewerProps): React.ReactNode {
+export function SourceViewer({
+  row,
+  pages,
+}: SourceViewerProps): React.ReactNode {
   const pageText = row?.page != null ? (pages[String(row.page)] ?? "") : "";
   const highlight = useMemo(
     () => (row ? findHighlight(pageText, row.verbatim) : null),
@@ -74,8 +77,12 @@ export function SourceViewer({ row, pages }: SourceViewerProps): React.ReactNode
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="font-mono">{row.id}</span>
           <span>
-            {row.section_id && <span className="font-medium">{row.section_id}</span>}
-            {row.page != null && <span className="ml-1">· page {row.page}</span>}
+            {row.section_id && (
+              <span className="font-medium">{row.section_id}</span>
+            )}
+            {row.page != null && (
+              <span className="ml-1">· page {row.page}</span>
+            )}
           </span>
         </div>
         <p className="mt-1 rounded-md bg-yellow-50 px-2 py-1.5 text-sm text-foreground">
@@ -88,7 +95,9 @@ export function SourceViewer({ row, pages }: SourceViewerProps): React.ReactNode
             {highlight ? (
               <>
                 {highlight.before}
-                <mark className="rounded bg-yellow-200 px-0.5">{highlight.match}</mark>
+                <mark className="rounded bg-yellow-200 px-0.5">
+                  {highlight.match}
+                </mark>
                 {highlight.after}
               </>
             ) : (

@@ -13,7 +13,11 @@ function kickoffContent(gsUri: string, filename: string): string {
   return `Analyze the RFP at ${gsUri} (uploaded as "${filename}") and build the compliance matrix.`;
 }
 
-export function UploadPanel({ compact = false }: { compact?: boolean }): React.ReactNode {
+export function UploadPanel({
+  compact = false,
+}: {
+  compact?: boolean;
+}): React.ReactNode {
   const stream = useStreamContext();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -118,11 +122,13 @@ export function UploadPanel({ compact = false }: { compact?: boolean }): React.R
           <div className="flex size-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
             <FileText className="size-6" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">RFP Compliance Workspace</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            RFP Compliance Workspace
+          </h1>
           <p className="max-w-md text-sm text-muted-foreground">
-            Upload a customer RFP (PDF). The agent extracts the section hierarchy and
-            requirements, assigns each a capability domain, and builds an editable
-            compliance matrix.
+            Upload a customer RFP (PDF). The agent extracts the section
+            hierarchy and requirements, assigns each a capability domain, and
+            builds an editable compliance matrix.
           </p>
         </div>
 
@@ -135,7 +141,9 @@ export function UploadPanel({ compact = false }: { compact?: boolean }): React.R
           onDrop={onDrop}
           className={cn(
             "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 transition-colors",
-            dragging ? "border-blue-400 bg-blue-50" : "border-border bg-muted/40 hover:bg-muted",
+            dragging
+              ? "border-blue-400 bg-blue-50"
+              : "border-border bg-muted/40 hover:bg-muted",
           )}
         >
           <input
@@ -156,9 +164,13 @@ export function UploadPanel({ compact = false }: { compact?: boolean }): React.R
           )}
           <div className="text-sm">
             <span className="font-medium text-foreground">Click to upload</span>{" "}
-            <span className="text-muted-foreground">or drag and drop a PDF</span>
+            <span className="text-muted-foreground">
+              or drag and drop a PDF
+            </span>
           </div>
-          <p className="text-xs text-muted-foreground">Digital (text-based) PDFs, up to 50 MB.</p>
+          <p className="text-xs text-muted-foreground">
+            Digital (text-based) PDFs, up to 50 MB.
+          </p>
         </label>
       </div>
     </div>

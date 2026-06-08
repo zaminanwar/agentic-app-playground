@@ -90,13 +90,21 @@ export function ComplianceMatrix({
                   {row.id}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{row.section_id || "—"}</span>
-                  {row.page != null && <span className="ml-1 text-muted-foreground">p.{row.page}</span>}
+                  <span className="font-medium text-foreground">
+                    {row.section_id || "—"}
+                  </span>
+                  {row.page != null && (
+                    <span className="ml-1 text-muted-foreground">
+                      p.{row.page}
+                    </span>
+                  )}
                 </td>
                 <td className="max-w-md px-3 py-2">
                   <p className="line-clamp-3 text-foreground">{row.verbatim}</p>
                   {row.summary && (
-                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{row.summary}</p>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                      {row.summary}
+                    </p>
                   )}
                 </td>
                 <td className="px-3 py-2">
@@ -111,7 +119,11 @@ export function ComplianceMatrix({
                   <CellSelect
                     value={row.compliance_status}
                     options={STATUS_OPTIONS}
-                    onChange={(v) => onUpdate(row.id, { compliance_status: v as ComplianceStatus })}
+                    onChange={(v) =>
+                      onUpdate(row.id, {
+                        compliance_status: v as ComplianceStatus,
+                      })
+                    }
                     className={STATUS_META[row.compliance_status].badge}
                   />
                 </td>
@@ -119,7 +131,9 @@ export function ComplianceMatrix({
                   <input
                     value={row.notes ?? ""}
                     onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => onUpdate(row.id, { notes: e.target.value })}
+                    onChange={(e) =>
+                      onUpdate(row.id, { notes: e.target.value })
+                    }
                     placeholder="Add a note…"
                     className="w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xs outline-none hover:border-border focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
                   />

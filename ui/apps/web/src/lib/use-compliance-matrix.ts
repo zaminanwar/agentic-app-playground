@@ -40,7 +40,9 @@ export interface UseComplianceMatrix {
   saving: boolean;
 }
 
-export function useComplianceMatrix(files: AgentFiles | undefined): UseComplianceMatrix {
+export function useComplianceMatrix(
+  files: AgentFiles | undefined,
+): UseComplianceMatrix {
   const [threadId] = useQueryState("threadId");
   const [overrides, setOverrides] = useState<Overrides>({});
   const [saving, setSaving] = useState(false);
@@ -51,7 +53,9 @@ export function useComplianceMatrix(files: AgentFiles | undefined): UseComplianc
   // Merge agent rows with reviewer overrides (overrides win, per field).
   const rows = useMemo<MatrixRow[] | null>(() => {
     if (!agentRows) return null;
-    return agentRows.map((r) => (overrides[r.id] ? { ...r, ...overrides[r.id] } : r));
+    return agentRows.map((r) =>
+      overrides[r.id] ? { ...r, ...overrides[r.id] } : r,
+    );
   }, [agentRows, overrides]);
 
   const persist = useCallback(
@@ -63,7 +67,10 @@ export function useComplianceMatrix(files: AgentFiles | undefined): UseComplianc
         .updateState(threadId, {
           values: {
             files: {
-              [MATRIX_PATH]: { content: serializeMatrix(merged), encoding: "utf-8" },
+              [MATRIX_PATH]: {
+                content: serializeMatrix(merged),
+                encoding: "utf-8",
+              },
             },
           },
         })
@@ -82,7 +89,9 @@ export function useComplianceMatrix(files: AgentFiles | undefined): UseComplianc
         saveTimer.current = setTimeout(() => {
           const base = parseMatrix(files);
           if (base) {
-            persist(base.map((r) => (next[r.id] ? { ...r, ...next[r.id] } : r)));
+            persist(
+              base.map((r) => (next[r.id] ? { ...r, ...next[r.id] } : r)),
+            );
           }
         }, 800);
         return next;
