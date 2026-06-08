@@ -100,7 +100,7 @@ langchain-google-genai==4.2.4
     #   deepagents
 langchain-protocol==0.0.16
     # via langchain-core
-langgraph==1.2.2
+langgraph==1.2.4
     # via
     #   agent
     #   langchain
