@@ -1,18 +1,18 @@
 "use client";
 
-import { Thread } from "@/components/thread";
+import React from "react";
+import { RfpWorkspace } from "@/components/rfp/rfp-workspace";
 import { StreamProvider } from "@/providers/Stream";
 import { ThreadProvider } from "@/providers/Thread";
 import { Toaster } from "@/components/ui/sonner";
-import React from "react";
 
-export default function DemoPage(): React.ReactNode {
+export default function Page(): React.ReactNode {
   return (
-    <React.Suspense fallback={<div>Loading (layout)...</div>}>
+    <React.Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
       <Toaster />
       <ThreadProvider>
         <StreamProvider>
-          <Thread />
+          <RfpWorkspace />
         </StreamProvider>
       </ThreadProvider>
     </React.Suspense>

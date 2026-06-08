@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Agent Inbox",
-  description: "Agent Inbox UX by LangChain",
+  title: "RFP Compliance Workspace",
+  description: "Shred customer RFPs into a traceable, editable compliance matrix.",
 };
 
 export default function RootLayout({
