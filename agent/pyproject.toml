@@ -1,7 +1,7 @@
 [project]
 name = "agent"
 version = "0.1.0"
-description = "Gemini (Vertex AI) deep research agent served by the Agent Server."
+description = "Gemini (Vertex AI) deep agent that shreds customer RFPs into a compliance matrix."
 # NOTE: no `readme` key on purpose — the Docker build context (.dockerignore)
 # omits README.md, and hatchling errors if `readme` points at a missing file.
 # create_agent lives in langchain.agents (LangChain 1.0+). 3.11 is the local
@@ -21,9 +21,12 @@ dependencies = [
     # Deep Agents harness (planning, virtual filesystem, subagents) on top of
     # create_agent — this is what builds the compiled `agent` graph.
     "deepagents>=0.6,<0.7",
-    # Web search tool used by the research subagent. Imported lazily in agent.py
-    # and only active when TAVILY_API_KEY is set.
-    "langchain-tavily>=0.2,<0.3",
+    # PDF text extraction for RFP ingestion (per-page text, traceability anchors).
+    # Imported lazily in agent.py so module import stays hermetic.
+    "pypdf>=5.0,<7.0",
+    # Reads uploaded RFP PDFs from the GCS bucket. Imported lazily in agent.py so
+    # the module imports without credentials (tests / CI / unconfigured envs).
+    "google-cloud-storage>=2.18,<4.0",
     # Persistence is NOT an app dependency here. With the self-hosted standalone
     # Agent Server (decision D2), the server injects a durable Postgres-backed
     # checkpointer + store itself (configured via DATABASE_URI) and uses Redis
@@ -58,7 +61,7 @@ tracing = [
 # 'dev' group below for tools (uv) that consume PEP 735 groups; the extra exists
 # so plain `pip install .[dev]` also works in CI.
 dev = [
-    "ruff>=0.6,<1.0",
+    "ruff>=0.15.16,<1.0",
     "mypy>=1.11,<2.0",
     "pytest>=8.0,<9.0",
 ]
@@ -66,7 +69,7 @@ dev = [
 # PEP 735 dependency group (native to `uv sync --group dev`).
 [dependency-groups]
 dev = [
-    "ruff>=0.6,<1.0",
+    "ruff>=0.15.16,<1.0",
     "mypy>=1.11,<2.0",
     "pytest>=8.0,<9.0",
 ]
@@ -75,12 +78,14 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# agent.py is a top-level module (not a package); tell hatchling what to ship.
+# agent.py and taxonomy.py are top-level modules (not a package); tell hatchling
+# what to ship.
 [tool.hatch.build.targets.wheel]
-include = ["agent.py", "langgraph.json"]
+include = ["agent.py", "taxonomy.py", "langgraph.json"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "agent.py" = "agent.py"
+"taxonomy.py" = "taxonomy.py"
 
 # --- Ruff: lint + format -----------------------------------------------------
 [tool.ruff]
@@ -122,7 +127,7 @@ no_implicit_optional = true
 check_untyped_defs = true
 # Third-party SDKs ship partial/none stubs; don't fail the build on them.
 ignore_missing_imports = true
-files = ["agent.py", "tests"]
+files = ["agent.py", "taxonomy.py", "tests"]
 
 [[tool.mypy.overrides]]
 # Tests use monkeypatch fixtures and dynamically-patched objects.
