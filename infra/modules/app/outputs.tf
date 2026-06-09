@@ -114,6 +114,13 @@ output "optional_secret_ids" {
   value       = { for k, s in google_secret_manager_secret.optional : k => s.secret_id }
 }
 
+# --- RFP document storage ---------------------------------------------------
+
+output "rfp_bucket" {
+  description = "GCS bucket name for uploaded RFP PDFs (null if create_rfp_bucket = false). Wired into both services as RFP_BUCKET."
+  value       = local.rfp_bucket
+}
+
 # --- Memorystore (Redis) ----------------------------------------------------
 
 output "redis_host" {

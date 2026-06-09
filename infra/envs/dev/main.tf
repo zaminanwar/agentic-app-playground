@@ -75,23 +75,17 @@ module "app" {
   # LangSmith using this API key. The 'langsmith-api-key' secret + its version
   # were created out-of-band (gcloud); the module grants the agent runtime SA
   # accessor and injects it as the LANGSMITH_API_KEY env var.
-  #
-  # TAVILY_API_KEY powers the deep research agent's web search tool. Terraform
-  # creates the 'tavily-api-key' secret, grants the agent runtime SA accessor,
-  # and wires the env var. A whitespace placeholder version is seeded so the
-  # Cloud Run revision deploys cleanly before a real key exists — the app strips
-  # the value and treats blank as "search unavailable" (it reads the key at call
-  # time, not startup). Add the real key as a new version out-of-band; "latest"
-  # then picks it up (no redeploy needed for the secret itself):
-  #   printf '%s' "$TAVILY_KEY" | gcloud secrets versions add tavily-api-key \
-  #     --project <project> --data-file=-
   agent_optional_secrets = {
     LANGSMITH_API_KEY = { secret_id = "langsmith-api-key", create = false }
-    TAVILY_API_KEY    = { secret_id = "tavily-api-key", create = true, placeholder_value = " " }
   }
 
   # --- Optional LangSmith tracing (secret value populated out-of-band) ---
   langsmith_tracing = var.langsmith_tracing
+
+  # --- RFP document storage: module creates <project_id>-rfp-docs and wires
+  #     RFP_BUCKET into both services (defaults; shown here for visibility). ---
+  create_rfp_bucket = true
+  rfp_bucket_name   = "rfp-docs"
 
   # --- Web runtime config: AGENT_URL is wired automatically by the module. ---
   web_assistant_id = "agent"
