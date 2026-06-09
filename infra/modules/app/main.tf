@@ -46,7 +46,12 @@ locals {
     "compute.googleapis.com",           # VPC/subnet for Direct VPC egress + Cloud SQL networking
     "redis.googleapis.com",             # Memorystore for Redis (LangGraph task queue / pub-sub)
     "servicenetworking.googleapis.com", # private services access for Memorystore peering
+    "storage.googleapis.com",           # GCS bucket for uploaded RFP PDFs
   ]) : toset([])
+
+  # Name of the RFP-documents bucket (null when not created), surfaced to both
+  # services as RFP_BUCKET. one(...) yields the single bucket name or null.
+  rfp_bucket = one(google_storage_bucket.rfp[*].name)
 
   # Cloud SQL connection name used by the Cloud Run sidecar socket.
   sql_connection_name = google_sql_database_instance.pg.connection_name
@@ -287,6 +292,52 @@ resource "google_secret_manager_secret_iam_member" "agent_optional_accessor" {
 }
 
 # ---------------------------------------------------------------------------
+# GCS bucket — uploaded RFP PDFs (and, in Phase 2, the capability corpus)
+# ---------------------------------------------------------------------------
+# The web service uploads RFP PDFs here (objectCreator) and hands the agent a
+# gs:// pointer; the agent downloads and parses them (objectViewer). Follows the
+# tfstate-bucket conventions in bootstrap/: uniform access, public access
+# prevented, versioned. force_destroy stays false so a stray destroy can't wipe
+# uploaded documents.
+
+resource "google_storage_bucket" "rfp" {
+  count = var.create_rfp_bucket ? 1 : 0
+
+  project                     = var.project_id
+  name                        = "${var.project_id}-${var.rfp_bucket_name}"
+  location                    = var.region
+  force_destroy               = false
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+
+  versioning {
+    enabled = true
+  }
+
+  labels = merge(local.common_labels, { purpose = "rfp-documents" })
+
+  depends_on = [google_project_service.services]
+}
+
+# Agent runtime SA reads uploaded PDFs.
+resource "google_storage_bucket_iam_member" "agent_rfp_viewer" {
+  count = var.create_rfp_bucket ? 1 : 0
+
+  bucket = google_storage_bucket.rfp[0].name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.agent_runtime.email}"
+}
+
+# Web runtime SA uploads PDFs (the BFF upload route).
+resource "google_storage_bucket_iam_member" "web_rfp_creator" {
+  count = var.create_rfp_bucket ? 1 : 0
+
+  bucket = google_storage_bucket.rfp[0].name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.web_runtime.email}"
+}
+
+# ---------------------------------------------------------------------------
 # Cloud Run v2 — agent service (self-hosted LangGraph Agent Server)
 # ---------------------------------------------------------------------------
 # The image is built FROM langchain/langgraph-api; its baked entrypoint serves
@@ -418,6 +469,15 @@ resource "google_cloud_run_v2_service" "agent" {
         value = local.redis_uri
       }
 
+      # RFP_BUCKET — GCS bucket the agent reads uploaded PDFs from (ingest_rfp).
+      dynamic "env" {
+        for_each = local.rfp_bucket == null ? {} : { RFP_BUCKET = local.rfp_bucket }
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       # Optional LangSmith tracing flag (plain env).
       dynamic "env" {
         for_each = var.langsmith_tracing == null ? {} : { LANGSMITH_TRACING = var.langsmith_tracing }
@@ -521,6 +581,15 @@ resource "google_cloud_run_v2_service" "web" {
       env {
         name  = "ASSISTANT_ID"
         value = var.web_assistant_id
+      }
+
+      # RFP_BUCKET — GCS bucket the upload route streams PDFs into.
+      dynamic "env" {
+        for_each = local.rfp_bucket == null ? {} : { RFP_BUCKET = local.rfp_bucket }
+        content {
+          name  = env.key
+          value = env.value
+        }
       }
 
       # Additional plain runtime env vars.
