@@ -39,7 +39,7 @@ jobs:
       # pnpm version is pinned by the `packageManager` field in ui/package.json
       # (pnpm@10.6.3). setup-pnpm reads it from there, so no duplicate version.
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           package_json_file: ui/package.json
 
