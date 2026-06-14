@@ -39,7 +39,7 @@ jobs:
       # uv manages the Python toolchain + dependency resolution. It reads the
       # version pin from agent/pyproject.toml (`requires-python`) / .python-version.
       - name: Set up uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           # Cache invalidates when the lock/manifest changes.
